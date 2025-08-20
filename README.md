@@ -59,7 +59,40 @@ saop scaffold legal-agent
 
 This command will create a new directory named `legal-agent` with a pre-configured agent template.
 
-## 📂 Project Structure
+## MCP 
 
-The project follows a standard layout for Python packages, with the core CLI logic located within the `saop` directory.
+The _"saop scaffold <agent_name>"_ command will also configure a basic MCP server implementation and a MCP client that lists & calls tools.
 
+_Start by running the MCP server_
+
+```
+#cd into the newly created directory
+cd legeal_agent
+
+#run the MCP server
+python mcp_server.py
+```
+
+_Then run the MCP client to list and use tools_
+
+```
+#start the the MCP client
+python mcp_client.py
+```
+
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/n8n_diagram01.png)
+
+
+## LangGraph
+
+The _"saop scaffold <agent_name>"_ command will also configure a basic LangGraph tool wrapper implementation that will wrap your MCP tools and execute your tools via LLM calls.
+
+Make sure the MCP server is still running, then run/test the LangGraph tool wrapper
+
+```
+python mcp_server.py
+```
+
+Your LLM should use your _greet tool_ for the first test prompt and should NOT use any tool for the second test prompt
+
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/n8n_diagram01.png)
