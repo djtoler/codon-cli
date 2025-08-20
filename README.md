@@ -73,6 +73,8 @@ cd legeal_agent
 python mcp_server.py
 ```
 
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/003.png)
+
 _Then run the MCP client to list and use tools_
 
 ```
@@ -80,7 +82,7 @@ _Then run the MCP client to list and use tools_
 python mcp_client.py
 ```
 
-![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/n8n_diagram01.png)
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/001.png)
 
 
 ## LangGraph
@@ -91,8 +93,9 @@ Make sure the MCP server is still running, then run/test the LangGraph tool wrap
 
 ```
 python mcp_server.py
+python langgraph_tool_wrapper.py
 ```
 
 Your LLM should use your _greet tool_ for the first test prompt and should NOT use any tool for the second test prompt
 
-![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/n8n_diagram01.png)
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/002.png)
