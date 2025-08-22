@@ -32,11 +32,19 @@ async def main():
     """
     print("🚀 Setting up LangGraph agent with MCP tools...")
 
-    # Set up the MultiServerMCPClient
+    # Configure the MultiServerMCPClient to connect to both local and remote servers
     client_config = {
-        "mcp_server": {
+        "local_mcp": {
             "url": env_config["MCP_BASE_URL"],
             "transport": "streamable_http"
+        },
+        "github_mcp": {
+            "url": env_config["MCP_GITHUB_BASE_URL"],
+            "transport": "streamable_http",
+            "headers": {
+                "Authorization": f"Bearer {env_config['GITHUB_PAT']}",
+                "X-MCP-Toolsets": "repos"
+            }
         }
     }
 
@@ -79,18 +87,24 @@ async def main():
 
     graph = builder.compile()
 
-    # --- Test the Graph ---
+    # --- Test the Graph with the new GitHub tool ---
+    
+    # Test a query that requires a GitHub tool
+    github_query = {"messages": [HumanMessage(content="Name a couple of the toolsets available in the remote-server.md file at the github/github-mcp-server/docs repository?")]}
+    print("\n▶️ Invoking agent to test the 'get_file_contents' tool...")
+    response = await graph.ainvoke(github_query)
+    print(f"✅ Final agent response: {response['messages'][-1].content}")
 
-    # Use ainvoke and await the result
+    # You can also keep your other tests to verify they still work
     greet_query = {"messages": [HumanMessage(content="Say hi to my friend Tim.")]}
     print("\n▶️ Invoking agent to test the 'greet' tool...")
     response = await graph.ainvoke(greet_query)
     print(f"✅ Final agent response: {response['messages'][-1].content}")
 
-    # Use ainvoke and await the result
-    simple_query = {"messages": [HumanMessage(content="What's your name?")]}
-    print("\n▶️ Invoking agent for a simple query...")
-    response = await graph.ainvoke(simple_query)
+    # Search GitHub file
+    greet_query = {"messages": [HumanMessage(content="Search a github file to find the following string.")]}
+    print("\n▶️ Invoking agent to test the 'GitHub' toolset...")
+    response = await graph.ainvoke(greet_query)
     print(f"✅ Final agent response: {response['messages'][-1].content}")
 
 

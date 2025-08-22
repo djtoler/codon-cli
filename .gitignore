@@ -11,7 +11,7 @@ venv/
 .vscode/
 
 # Environment variables
-# .env
+.env
 
 # Editor-specific directories
 .vscode/
