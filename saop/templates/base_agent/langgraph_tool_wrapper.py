@@ -95,7 +95,7 @@ async def main():
     response = await graph.ainvoke(github_query)
     print(f"✅ Final agent response: {response['messages'][-1].content}")
 
-    # You can also keep your other tests to verify they still work
+    
     greet_query = {"messages": [HumanMessage(content="Say hi to my friend Tim.")]}
     print("\n▶️ Invoking agent to test the 'greet' tool...")
     response = await graph.ainvoke(greet_query)
