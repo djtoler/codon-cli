@@ -65,17 +65,18 @@ def load_env_config() -> EnvironmentConfig:
         MODEL_NAME=os.environ.get("MODEL_NAME", ""),
         MODEL_TEMPERATURE=float(os.environ.get("MODEL_TEMPERATURE", 0.7)),
         MODEL_PROVIDER=os.environ.get("MODEL_PROVIDER", ""),
-        # A2A Vars# agent.yaml
+
+        # A2A Vars
         A2A_AGENT_CARD_PATH=os.environ.get("A2A_AGENT_CARD_PATH", ""),
         A2A_HOST=os.environ.get("A2A_HOST", ""),
-        A2A_PORT=int(os.environ.get("A2A_PORT", 8000)),
+        A2A_PORT=int(os.environ.get("A2A_PORT", 9999)),
+
         # MCP Vars
         MCP_BASE_URL=os.environ.get("MCP_BASE_URL", ""),
         MCP_HOST=os.environ.get("MCP_HOST", "127.0.0.1"), 
-        MCP_PORT=int(os.environ.get("MCP_PORT", "8000")),  
+        MCP_PORT=int(os.environ.get("MCP_PORT", "9000")),  
         MCP_GITHUB_BASE_URL=os.environ.get("MCP_GITHUB_BASE_URL", ""),
-        SAMPLE01_MCP_TOOL_API_KEY=os.getenv("MCP_TOOL_API_KEY"),
-        SAMPLE02_MCP_TOOL_API_KEY=os.getenv("MCP_TOOL_API_KEY"),
+
         # OpenTel Endpoint Var
         OTEL_EXPORTER_OTLP_ENDPOINT=os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT", ""),
         # DB & Cache Vars

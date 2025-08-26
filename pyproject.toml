@@ -51,9 +51,10 @@ dependencies = [
     "langgraph>=0.0.86",
     "langchain-openai>=0.1.18",
     "langchain-community>=0.2.7",
-    "fastmcp>=0.0.1",  
-    "aiohttp>=3.9.0",  
+    "fastmcp>=0.0.1",
+    "aiohttp>=3.9.0",
     "mcp[cli]>=1.13.0",
     "a2a-sdk[grpc,http-server,telemetry]>=0.3.1",
     "langchain-mcp-adapters (>=0.1.9,<0.2.0)",
+    "google-adk>=1.12.0",
 ]
