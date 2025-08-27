@@ -20,8 +20,6 @@ from a2a.types import (AgentCard, AgentSkill, AgentCapabilities, Message,
 def client():
     mock_request_handler = MagicMock(spec=DefaultRequestHandler)
     
-    # We'll make the mock's on_message_send method return a valid Message object
-    # that your test can then assert on.
     mock_message_response = Message(
         message_id="mock-response-id",
         role=Role.agent,
@@ -63,9 +61,7 @@ def client():
         yield client
 
 def test_message_send_returns_echo_text(client):
-    """
-    Test that the / endpoint returns the sent message via JSON-RPC.
-    """
+
     request_payload = {
       "jsonrpc": "2.0",
       "id": "12345",
@@ -89,5 +85,5 @@ def test_message_send_returns_echo_text(client):
     response_data = response.json()
     
     assert "result" in response_data
-    # ⚠️ CORRECTED: Access the text via the nested keys
+
     assert response_data["result"]["parts"][0]["text"] == "Hello, world!"
