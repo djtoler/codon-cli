@@ -59,6 +59,8 @@ saop scaffold legal-agent
 
 This command will create a new directory named `legal-agent` with a pre-configured agent template.
 
+#### _Be sure to add GitHub token and LLM config info to .env file_
+
 ## MCP 
 
 The _"saop scaffold <agent_name>"_ command will also configure a basic MCP server implementation and a MCP client that lists & calls tools.
@@ -85,7 +87,7 @@ python mcp_client.py
 ![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/001.png)
 
 
-## LangGraph
+## LangGraph MCP Tool Wrapper
 
 The _"saop scaffold <agent_name>"_ command will also configure a basic LangGraph tool wrapper implementation that will wrap your MCP tools and execute your tools via LLM calls.
 
@@ -99,3 +101,26 @@ python langgraph_tool_wrapper.py
 Your LLM should use your _greet tool_ for the first test prompt and should NOT use any tool for the second test prompt
 
 ![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/002.png)
+
+
+## A2A
+
+The _"saop scaffold <agent_name>"_ command will also configure a basic A2A server.
+
+1. Create your A2A AgentCard using the a2a_agent_card.yaml
+2. Then run the following command to start your A2A server.
+
+```
+python a2a_server.py
+```
+
+## Agent Architecture 
+
+![Diagram](https://github.com/djtoler2/imgs/blob/main/SystemArchitecture.png)
+
+1. An A2A compliant client sends a request to our A2A compliant server.
+2. Our A2A server forwards the request our LangGraph agent.
+3. Our LangGraph agent starts to processes the request. 
+4. If our LangGraph agent decides to use any MCP tools from the tool list, it'll use a tool. The response from the tool will be used in our LangGraph agents response. If our LangGraph agent decideds _NOT_ to use any tools from the MCP tool list, it'll respond soley using the LLM its configured with.
+5. Our LangGraph agents response will be formatted into an A2A compliant response, processed by our A2A server, then sent back to the A2A client that initiated request.
+
