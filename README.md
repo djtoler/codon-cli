@@ -120,9 +120,9 @@ python a2a_server.py
 
 | **System Flow** | **Dummy File Names** |
 | :--- | :--- |
-| An A2A compliant client sends a request to our A2A compliant server. | `client_request.json` |
-| Our A2A server forwards the request to our LangGraph agent. | `server_to_langgraph_task.http` |
-| Our LangGraph agent starts to process the request. | `agent_process_init.log` |
-| If our LangGraph agent decides to use any MCP tools from the tool list, it'll use a tool. The response from the tool will be used in our LangGraph agents response. If our LangGraph agent decides _NOT_ to use any tools from the MCP tool list, it'll respond solely using the LLM its configured with. | `mcp_tool_response.json` <br> `llm_only_response.txt` |
-| Our LangGraph agents response will be formatted into an A2A compliant response, processed by our A2A server, then sent back to the A2A client that initiated the request. | `langgraph_to_server_response.json` <br> `server_response_final.json` |
+| 1. An A2A compliant client sends a request to our A2A compliant server. | `a2a_client.py` or `a2a_client_streaming.py` |
+| Our A2A server forwards the request to our LangGraph agent. | `a2a_server.py` |
+| Our LangGraph agent starts to process the request. | `langgraph_executor.py` |
+| If our LangGraph agent decides to use any MCP tools from the tool list, it'll use a tool. The response from the tool will be used in our LangGraph agents response. If our LangGraph agent decides _NOT_ to use any tools from the MCP tool list, it'll respond solely using the LLM its configured with. | `langgraph_tool_wrapper.py` <br> `langgraph_executor.py` |
+| Our LangGraph agents response will be formatted into an A2A compliant response, processed by our A2A server, then sent back to the A2A client that initiated the request. | `langgraph_executor.py` <br> `a2a_server.py` <br> `a2a_client.py` or `a2a_client_streaming.py` |
 
