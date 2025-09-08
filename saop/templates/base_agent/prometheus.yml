@@ -1,0 +1,18 @@
+# How often Prometheus scrapes (pulls) metrics from your app
+global:
+  scrape_interval: 5s   # every 5 seconds
+
+scrape_configs:
+
+  - job_name: "app"
+
+    # Where to scrape from. Prometheus will GET http://<target>/metrics
+    static_configs:
+      - targets:
+          # If your app runs on your HOST machine (uvicorn on your laptop):
+          - "host.docker.internal:8000"
+          # fallback if needed: - "localhost:8000"
+
+        # Extra labels that get attached to every metric from this target
+        labels:
+          service: "app"

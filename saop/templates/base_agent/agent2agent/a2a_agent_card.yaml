@@ -1,0 +1,17 @@
+name: "LangGraph MCP Agent"
+description: "An agent powered by LangGraph that uses MCP tools to interact with various services."
+url: "http://localhost:9999/"
+version: "1.0.0"
+defaultInputModes: ["text"]
+defaultOutputModes: ["text"]
+capabilities:
+  streaming: true
+skills:
+  - id: "query-github-repo"
+    name: "Query GitHub Repository"
+    description: "Accesses GitHub repositories to retrieve file contents."
+    tags: ["github", "repository"]
+  - id: "greet"
+    name: "Greet Friend"
+    description: "Greets a friend by name."
+    tags: ["social"]
