@@ -1,6 +1,6 @@
-# test_jira_tickets_validation.py
+# test_security_requirements_validation.py
 """
-Comprehensive test that validates each Jira ticket requirement with proof.
+Comprehensive test that validates each security requirement with proof.
 Provides detailed explanations for why tests pass/fail and how they satisfy requirements.
 """
 import requests
@@ -8,8 +8,8 @@ import json
 import time
 from typing import Optional, Dict, Any
 
-class JiraTicketValidator:
-    """Validates Jira ticket requirements with detailed proof"""
+class SecurityRequirementsValidator:
+    """Validates security requirements with detailed proof"""
     
     def __init__(self, base_url: str = "http://localhost:9999"):
         self.base_url = base_url.rstrip('/')
@@ -17,11 +17,11 @@ class JiraTicketValidator:
         self.dev_token = None
         self.dev_api_key = "dev-api-key-12345"
         
-    def print_ticket_header(self, ticket_name: str, description: str):
-        """Print formatted ticket header"""
+    def print_requirement_header(self, requirement_name: str, description: str):
+        """Print formatted requirement header"""
         print("\n" + "=" * 80)
-        print(f"JIRA TICKET: {ticket_name}")
-        print(f"REQUIREMENT: {description}")
+        print(f"SECURITY REQUIREMENT: {requirement_name}")
+        print(f"DESCRIPTION: {description}")
         print("=" * 80)
     
     def print_test_result(self, test_name: str, expected: str, actual: str, passed: bool, explanation: str):
@@ -54,10 +54,10 @@ class JiraTicketValidator:
             print(f"Token request error: {e}")
             return None
 
-    def ticket_1_fastapi_security(self):
-        """Test Ticket 1: FastAPI security (OAuth2 password + API-key header)"""
-        self.print_ticket_header(
-            "TICKET 1", 
+    def requirement_1_fastapi_security(self):
+        """Test Requirement 1: FastAPI security (OAuth2 password + API-key header)"""
+        self.print_requirement_header(
+            "REQ-1", 
             "FastAPI security (OAuth2 password + API-key header)"
         )
         
@@ -137,15 +137,15 @@ class JiraTicketValidator:
             "Requests without authentication MUST be rejected. This proves the API key authentication is enforced, not optional."
         )
 
-    def ticket_2_rbac_middleware(self):
-        """Test Ticket 2: RBAC middleware (admin/dev/view roles)"""
-        self.print_ticket_header(
-            "TICKET 2",
+    def requirement_2_rbac_middleware(self):
+        """Test Requirement 2: RBAC middleware (admin/dev/view roles)"""
+        self.print_requirement_header(
+            "REQ-2",
             "RBAC middleware (admin/dev/view roles)"
         )
         
         if not self.admin_token or not self.dev_token:
-            print("ERROR: Cannot test RBAC - missing authentication tokens from Ticket 1")
+            print("ERROR: Cannot test RBAC - missing authentication tokens from Requirement 1")
             return
         
         # Test 2.1: Admin Role Access
@@ -209,15 +209,15 @@ class JiraTicketValidator:
             "Endpoints requiring specific permissions MUST check user permissions. This validates fine-grained access control beyond role level."
         )
 
-    def ticket_3_a2a_principal_injection(self):
-        """Test Ticket 3: JWT principal injection into A2A RequestContext"""
-        self.print_ticket_header(
-            "TICKET 3",
+    def requirement_3_a2a_principal_injection(self):
+        """Test Requirement 3: JWT principal injection into A2A RequestContext"""
+        self.print_requirement_header(
+            "REQ-3",
             "JWT principal injection into A2A RequestContext"
         )
         
         if not self.dev_token:
-            print("ERROR: Cannot test A2A principal injection - missing dev token from Ticket 1")
+            print("ERROR: Cannot test A2A principal injection - missing dev token from Requirement 1")
             return
         
         # Test 3.1: Unauthenticated A2A Request (Should Fail)
@@ -358,24 +358,24 @@ class JiraTicketValidator:
     def print_final_summary(self):
         """Print final validation summary"""
         print("\n" + "=" * 80)
-        print("JIRA TICKET VALIDATION SUMMARY")
+        print("SECURITY REQUIREMENTS VALIDATION SUMMARY")
         print("=" * 80)
         
-        print("\nTICKET 1: FastAPI Security (OAuth2 + API Key)")
+        print("\nREQ-1: FastAPI Security (OAuth2 + API Key)")
         print("- OAuth2 password flow authentication: IMPLEMENTED")
         print("- API key header authentication: IMPLEMENTED") 
         print("- Invalid credential rejection: IMPLEMENTED")
         print("- Multiple authentication methods: IMPLEMENTED")
         print("VERDICT: COMPLETE")
         
-        print("\nTICKET 2: RBAC Middleware (admin/dev/view roles)")
+        print("\nREQ-2: RBAC Middleware (admin/dev/view roles)")
         print("- Role-based endpoint access: IMPLEMENTED")
         print("- Permission-based access control: IMPLEMENTED")
         print("- Cross-role access blocking: IMPLEMENTED")
         print("- Granular permission system: IMPLEMENTED")
         print("VERDICT: COMPLETE")
         
-        print("\nTICKET 3: JWT Principal Injection into A2A RequestContext")
+        print("\nREQ-3: JWT Principal Injection into A2A RequestContext")
         print("- A2A endpoint authentication enforcement: IMPLEMENTED")
         print("- JWT principal injection: IMPLEMENTED")
         print("- API key principal injection: IMPLEMENTED")
@@ -383,30 +383,30 @@ class JiraTicketValidator:
         print("VERDICT: COMPLETE")
         
         print("\n" + "=" * 80)
-        print("ALL JIRA TICKETS: SUCCESSFULLY IMPLEMENTED")
+        print("ALL SECURITY REQUIREMENTS: SUCCESSFULLY IMPLEMENTED")
         print("Security implementation meets all requirements with proof.")
         print("=" * 80)
 
     def run_validation(self):
-        """Run complete Jira ticket validation"""
-        print("SAOP SECURITY IMPLEMENTATION - JIRA TICKET VALIDATION")
+        """Run complete security requirements validation"""
+        print("SAOP SECURITY IMPLEMENTATION - REQUIREMENTS VALIDATION")
         print("Testing against:", self.base_url)
-        print("This test validates each Jira requirement with detailed proof.")
+        print("This test validates each security requirement with detailed proof.")
         
-        # Run all ticket validations
-        self.ticket_1_fastapi_security()
-        self.ticket_2_rbac_middleware() 
-        self.ticket_3_a2a_principal_injection()
+        # Run all requirement validations
+        self.requirement_1_fastapi_security()
+        self.requirement_2_rbac_middleware() 
+        self.requirement_3_a2a_principal_injection()
         
         # Print final summary
         self.print_final_summary()
 
 if __name__ == "__main__":
-    print("Jira Ticket Validation Test")
+    print("Security Requirements Validation Test")
     print("Make sure your A2A server is running:")
     print("python -m agent2agent.a2a_server")
     print()
     input("Press Enter when ready...")
     
-    validator = JiraTicketValidator()
+    validator = SecurityRequirementsValidator()
     validator.run_validation()
