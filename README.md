@@ -64,7 +64,9 @@ This command will create a new directory named `legal-agent` with a pre-configur
 The _"saop scaffold <agent_name>"_ command will create templates for you to build your agent from
 
 _Add your agents enviornment variables in a .env file & to the agent.config.py file_
+
 _Add your customized agent Role configurations in the roles.py file or proceed with default roles_
+
 _Add your customized agent Prompt variables in the vars.py file or proceed with default prompts_
 
 
