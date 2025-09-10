@@ -57,72 +57,77 @@ saop scaffold <agent_name>
 saop scaffold legal-agent
 ```
 
-This command will create a new directory named `legal-agent` with a pre-configured agent template.
+This command will create a new directory named `legal-agent` with a pre-configured agent templates.
 
-#### _Be sure to add GitHub token and LLM config info to .env file_
+## CONFIG
+
+The _"saop scaffold <agent_name>"_ command will create templates for you to build your agent from
+
+_Add your agents enviornment variables in a .env file & to the agent.config.py file_
+_Add your customized agent Role configurations in the roles.py file or proceed with default roles_
+_Add your customized agent Prompt variables in the vars.py file or proceed with default prompts_
+
 
 ## MCP 
 
-The _"saop scaffold <agent_name>"_ command will also configure a basic MCP server implementation and a MCP client that lists & calls tools.
+The _"saop scaffold <agent_name>"_ command will also configure a basic MCP server implementation registers local tools.
 
 _Start by running the MCP server_
 
 ```
-#cd into the newly created directory
-cd legeal_agent
+#cd into the base_agent directory of the newly created agent dir
+cd legal_agent/templates/base_agent
 
 #run the MCP server
-python mcp_server.py
+python3 -m _mcp.mcp_server
 ```
 
-![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/003.png)
+<!-- ![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/003.png) -->
 
-_Then run the MCP client to list and use tools_
+<!-- _Then run the MCP client to list and use tools_
 
 ```
 #start the the MCP client
 python mcp_client.py
 ```
 
-![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/001.png)
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/001.png) -->
+<!-- 
 
+## LangGraph Agent
 
-## LangGraph MCP Tool Wrapper
-
-The _"saop scaffold <agent_name>"_ command will also configure a basic LangGraph tool wrapper implementation that will wrap your MCP tools and execute your tools via LLM calls.
-
-Make sure the MCP server is still running, then run/test the LangGraph tool wrapper
+The _"saop scaffold <agent_name>"_ command will also configure a basic LangGraph agent.
 
 ```
 python mcp_server.py
-python langgraph_tool_wrapper.py
+python langgraph_agent.py
 ```
 
 Your LLM should use your _greet tool_ for the first test prompt and should NOT use any tool for the second test prompt
 
-![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/002.png)
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/002.png) -->
 
 
 ## A2A
 
-The _"saop scaffold <agent_name>"_ command will also configure a basic A2A server.
+The _"saop scaffold <agent_name>"_ command will also configure a basic A2A server using FastAPI as a security layer, OpenTelemetry as a data tracing layer and initialize the execution of our agent using LangGraph.
 
-1. Create your A2A AgentCard using the a2a_agent_card.yaml
-2. Then run the following command to start your A2A server.
+Run the following command to start your A2A server.
 
 ```
-python a2a_server.py
+python3 app.py
 ```
 
 ## Agent Architecture 
 
 ![Diagram](https://github.com/djtoler2/imgs/blob/main/SystemArchitecture.png)
 
-| **System Flow** | **Dummy File Names** |
+| **System Flow** | **File Names** |
 | :--- | :--- |
-| 1. An A2A compliant client sends a request to our A2A compliant server. | `a2a_client.py` or `a2a_client_streaming.py` |
-| Our A2A server forwards the request to our LangGraph agent. | `a2a_server.py` |
-| Our LangGraph agent starts to process the request. | `langgraph_executor.py` |
-| If our LangGraph agent decides to use any MCP tools from the tool list, it'll use a tool. The response from the tool will be used in our LangGraph agents response. If our LangGraph agent decides _NOT_ to use any tools from the MCP tool list, it'll respond solely using the LLM its configured with. | `langgraph_tool_wrapper.py` <br> `langgraph_executor.py` |
-| Our LangGraph agents response will be formatted into an A2A compliant response, processed by our A2A server, then sent back to the A2A client that initiated the request. | `langgraph_executor.py` <br> `a2a_server.py` <br> `a2a_client.py` or `a2a_client_streaming.py` |
+| 1. An A2A compliant client sends a request to our A2A compliant server. | `tests/test_client.py` |
+| 2. Our FastAPI implementation secures our agents by authenticating requests to our A2A server. | `api/auth.py` <br> `api/middleware.py` <br> `api/routes.py` <br> `api/wrapper.py`|
+| 3. Our OpenTelemetry implementation provieds trace data for our A2A server | `telemetry/telemetry.py` |
+| 4. Our A2A server passes authenticated requests to our LangGraph executor | `langgraph/langgraph_executor.py` |
+| 5. Our LangGraph executor uses its role and decision making logic to respond to requests via the _AgentFactory_ configuration| `langgraph/langgraph_agent.py` <br> `langgraph/langchain_chains.py` <br> `langgraph/agent_factory.py`|
+| 6. Our agent decides whether to use tools or not, then returns an A2A compliant response | `langgraph/langgraph_agent.py` <br> `langgraph/langgraph_executor.py` <br> `agent2agent/a2a_server.py` |
 
