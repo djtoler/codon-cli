@@ -59,7 +59,7 @@ saop scaffold legal-agent
 
 This command will create a new directory named `legal-agent` with a pre-configured agent templates.
 
-## CONFIG
+## Step 4: Configure the agent
 
 The _"saop scaffold <agent_name>"_ command will create templates for you to build your agent from
 
@@ -68,7 +68,7 @@ _Add your customized agent Role configurations in the roles.py file or proceed w
 _Add your customized agent Prompt variables in the vars.py file or proceed with default prompts_
 
 
-## MCP 
+## Step 5: Run the MCP server 
 
 The _"saop scaffold <agent_name>"_ command will also configure a basic MCP server implementation registers local tools.
 
@@ -82,7 +82,7 @@ cd legal_agent/templates/base_agent
 python3 -m _mcp.mcp_server
 ```
 
-<!-- ![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/003.png) -->
+![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/003.png)
 
 <!-- _Then run the MCP client to list and use tools_
 
@@ -108,7 +108,7 @@ Your LLM should use your _greet tool_ for the first test prompt and should NOT u
 ![Diagram](https://github.com/djtoler/Resume-Refiner-AI-Workflow/blob/main/images/002.png) -->
 
 
-## A2A
+## Step 6: Run the A2A server
 
 The _"saop scaffold <agent_name>"_ command will also configure a basic A2A server using FastAPI as a security layer, OpenTelemetry as a data tracing layer and initialize the execution of our agent using LangGraph.
 
@@ -117,6 +117,10 @@ Run the following command to start your A2A server.
 ```
 python3 app.py
 ```
+
+| **Role & Available Tools** | **Server & Agent Ready** |
+| :--- | :--- |
+| ![Diagram](https://github.com/djtoler2/imgs/blob/main/tools.png) | ![Diagram](https://github.com/djtoler2/imgs/blob/main/agentserver.png) |
 
 ## Agent Architecture 
 
