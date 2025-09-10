@@ -118,9 +118,9 @@ Your LLM should use your _greet tool_ for the first test prompt and should NOT u
 python3 app.py
 ```
 
-| **Role & Available Tools** | **Server & Agent Ready** |
+| **Server & Agent Ready**  | **Role & Available Tools** |
 | :--- | :--- |
-| ![Diagram](https://github.com/djtoler2/imgs/blob/main/tools.png) | ![Diagram](https://github.com/djtoler2/imgs/blob/main/agentserver.png) |
+| ![Diagram](https://github.com/djtoler2/imgs/blob/main/agentserver.png) | ![Diagram](https://github.com/djtoler2/imgs/blob/main/tools.png) |
 
 ## Agent Architecture 
 
