@@ -61,13 +61,11 @@ This command will create a new directory named `legal-agent` with a pre-configur
 
 ## Step 4: Configure the agent
 
-The _"saop scaffold <agent_name>"_ command will create templates for you to build your agent from
+The `saop scaffold <agent_name>` command will create templates for you to build your agent from.
 
-_Add your agents enviornment variables in a .env file & to the agent.config.py file_
-
-_Add your customized agent Role configurations in the roles.py file or proceed with default roles_
-
-_Add your customized agent Prompt variables in the vars.py file or proceed with default prompts_
+- Add your agent's environment variables in a `.env` file & to the `agent.config.py` file.
+- Add your customized agent Role configurations in the `roles.py` file or proceed with default roles.
+- Add your customized agent Prompt variables in the `vars.py` file or proceed with default prompts.
 
 
 ## Step 5: Run the MCP server 
@@ -112,9 +110,9 @@ Your LLM should use your _greet tool_ for the first test prompt and should NOT u
 
 ## Step 6: Run the A2A server
 
-The _"saop scaffold <agent_name>"_ command will also configure a basic A2A server using FastAPI as a security layer, OpenTelemetry as a data tracing layer and initialize the execution of our agent using LangGraph.
+- The _"saop scaffold <agent_name>"_ command will also configure a basic A2A server using FastAPI as a security layer, OpenTelemetry as a data tracing layer and initialize the execution of our agent using LangGraph.
 
-Run the following command to start your A2A server.
+- Run the following command to start your A2A server.
 
 ```
 python3 app.py
