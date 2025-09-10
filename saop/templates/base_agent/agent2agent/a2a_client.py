@@ -30,7 +30,8 @@ async def send_message(session, url):
           "role": "user",
           "parts": [
             {
-              "text": "Use the tools available in order to help you name a couple of the toolsets available in the remote-server.md file at the github/github-mcp-server/docs repository?."
+              # "text": "Use the tools available in order to help you name a couple of the toolsets available in the remote-server.md file at the github/github-mcp-server/docs repository?."
+              "text": "You MUST use a tool if its available. Regardless to whether your can solve it yourself or not. Use the tools available to help solve the math problem of 98 + 2873."
             }
           ]
         }

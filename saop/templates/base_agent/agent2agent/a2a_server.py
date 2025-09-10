@@ -30,12 +30,16 @@ class A2AServer:
         self.app = None
     
     async def initialize(self):
-        # Initialize LangGraph executor
         print("🚀 Setting up LangGraph agent with MCP tools...")
 
         self.executor = LangGraphA2AExecutor()
         await self.executor.initialize()
+        success = await self.executor.initialize()
         
+        if not success:
+            print(f"⚠️ Server starting in degraded mode: {self.executor.get_initialization_error()}")
+            print("🔧 Fix the role configuration and restart for full functionality")
+            
         # Create A2A application
         agent_card = create_agent_card_from_yaml_file('a2a_agent_card.yaml')
         request_handler = DefaultRequestHandler(

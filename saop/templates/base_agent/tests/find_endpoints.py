@@ -1,204 +1,119 @@
-# # find_a2a_endpoints.py
-# """
-# Discover actual A2A endpoints from your running server.
-# """
-# import requests
-# import json
-
-# def find_a2a_endpoints():
-#     """Find real A2A endpoints"""
-#     base_url = "http://localhost:9999"
-    
-#     print("Discovering A2A endpoints...")
-    
-#     # Get agent card to see what's available
-#     card_response = requests.get(f"{base_url}/.well-known/agent-card.json")
-#     if card_response.status_code == 200:
-#         card = card_response.json()
-#         print("Agent Card:")
-#         print(json.dumps(card, indent=2))
-        
-#         # Look for endpoint hints
-#         if "endpoints" in card:
-#             print("\nEndpoints from agent card:")
-#             for key, value in card["endpoints"].items():
-#                 print(f"  {key}: {value}")
-    
-#     # Check OpenAPI spec for available endpoints
-#     openapi_response = requests.get(f"{base_url}/openapi.json")
-#     if openapi_response.status_code == 200:
-#         openapi = openapi_response.json()
-#         print("\nAvailable paths from OpenAPI:")
-#         for path, methods in openapi.get("paths", {}).items():
-#             method_list = list(methods.keys())
-#             print(f"  {path} - {method_list}")
-    
-#     # Try some common A2A patterns
-#     print("\nTesting common A2A patterns...")
-    
-#     # Get a dev token first
-#     token_response = requests.post(f"{base_url}/auth/token", data={
-#         "username": "dev",
-#         "password": "secret"
-#     })
-    
-#     if token_response.status_code == 200:
-#         token = token_response.json()["access_token"]
-#         headers = {"Authorization": f"Bearer {token}"}
-        
-#         # Test JSON-RPC with proper method
-#         jsonrpc_methods = [
-#             "agent.status",
-#             "agent.capabilities", 
-#             "task.create",
-#             "task.status",
-#             "message.send"
-#         ]
-        
-#         for method in jsonrpc_methods:
-#             payload = {
-#                 "jsonrpc": "2.0",
-#                 "method": method,
-#                 "params": {},
-#                 "id": 1
-#             }
-            
-#             response = requests.post(
-#                 f"{base_url}/jsonrpc",
-#                 json=payload,
-#                 headers={**headers, "Content-Type": "application/json"}
-#             )
-            
-#             print(f"JSON-RPC {method}: {response.status_code}")
-#             if response.status_code == 200:
-#                 data = response.json()
-#                 print(f"  Response: {json.dumps(data, indent=2)}")
-
-# if __name__ == "__main__":
-#     find_a2a_endpoints()
-
-
-
-
-
-
-# check_a2a_endpoints.py
+#!/usr/bin/env python3
 """
-Check what endpoints and capabilities the A2A library actually provides.
+Debug script to discover what endpoints your A2A server actually has.
 """
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import requests
+import json
 
-def inspect_a2a_application():
-    """Inspect the A2A application to see what it actually provides"""
-    
+def test_endpoint(url, method="GET", data=None, headers=None):
+    """Test an endpoint and return status code and response info"""
     try:
-        from a2a.server.apps.jsonrpc import A2AStarletteApplication
-        from a2a.server.request_handlers import DefaultRequestHandler
-        from a2a.server.tasks import InMemoryTaskStore
-        from agent2agent.a2a_utils import create_agent_card_from_yaml_file
-        from langgraph.langgraph_executor import LangGraphA2AExecutor
+        if method == "GET":
+            response = requests.get(url, headers=headers, timeout=5)
+        elif method == "POST":
+            response = requests.post(url, data=data, json=data if isinstance(data, dict) else None, headers=headers, timeout=5)
         
-        print("A2A Library Inspection")
-        print("=" * 40)
-        
-        # Create the same setup as your server
-        executor = LangGraphA2AExecutor()
-        
-        agent_card = create_agent_card_from_yaml_file('a2a_agent_card.yaml')
-        
-        request_handler = DefaultRequestHandler(
-            agent_executor=executor,
-            task_store=InMemoryTaskStore()
-        )
-        
-        starlette_app = A2AStarletteApplication(
-            agent_card=agent_card,
-            http_handler=request_handler
-        )
-        
-        # Build the ASGI app
-        asgi_app = starlette_app.build()
-        
-        print("A2AStarletteApplication built successfully")
-        
-        # Check routes
-        print("\nInspecting A2A routes...")
-        if hasattr(asgi_app, 'routes'):
-            for route in asgi_app.routes:
-                print(f"Route: {route}")
-                if hasattr(route, 'path'):
-                    print(f"  Path: {route.path}")
-                if hasattr(route, 'methods'):
-                    print(f"  Methods: {route.methods}")
-        
-        # Check if A2AStarletteApplication has specific JSON-RPC endpoints
-        print("\nChecking A2AStarletteApplication attributes:")
-        for attr in dir(starlette_app):
-            if 'jsonrpc' in attr.lower() or 'rpc' in attr.lower():
-                print(f"  Found: {attr}")
-        
-        print("\nChecking DefaultRequestHandler capabilities:")
-        for attr in dir(request_handler):
-            if not attr.startswith('_'):
-                print(f"  Method: {attr}")
-        
-        return True
-        
-    except Exception as e:
-        print(f"Error inspecting A2A: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
+        return {
+            "url": url,
+            "status": response.status_code,
+            "headers": dict(response.headers),
+            "text": response.text[:200] + "..." if len(response.text) > 200 else response.text
+        }
+    except requests.exceptions.RequestException as e:
+        return {
+            "url": url,
+            "status": "ERROR",
+            "error": str(e)
+        }
 
-def test_a2a_server_routes():
-    """Test what routes your actual running server has"""
-    import requests
-    
-    print("\nTesting actual server routes...")
+def main():
     base_url = "http://localhost:9999"
     
-    # Test different potential JSON-RPC endpoints
+    print("🔍 DEBUGGING A2A SERVER ENDPOINTS")
+    print(f"Testing server at: {base_url}")
+    print("=" * 60)
+    
+    # Test basic connectivity
+    print("\n📡 BASIC CONNECTIVITY")
     endpoints_to_test = [
-        "/jsonrpc",
-        "/rpc", 
-        "/json-rpc",
-        "/api/jsonrpc",
-        "/v1/jsonrpc",
-        "/"  # Root endpoint
+        (f"{base_url}/", "GET"),
+        (f"{base_url}/docs", "GET"),
+        (f"{base_url}/openapi.json", "GET"),
+        (f"{base_url}/health", "GET"),
     ]
     
-    for endpoint in endpoints_to_test:
-        try:
-            # Test with a simple JSON-RPC call
-            payload = {
-                "jsonrpc": "2.0",
-                "method": "ping",
-                "params": {},
-                "id": 1
-            }
-            
-            response = requests.post(f"{base_url}{endpoint}", 
-                                   json=payload, 
-                                   timeout=2)
-            
-            print(f"{endpoint}: {response.status_code}")
-            if response.status_code not in [404, 405]:
-                print(f"  Response: {response.text[:100]}...")
-                
-        except requests.exceptions.RequestException as e:
-            print(f"{endpoint}: Connection error - {e}")
+    for url, method in endpoints_to_test:
+        result = test_endpoint(url, method)
+        status_emoji = "✅" if isinstance(result["status"], int) and result["status"] < 400 else "❌"
+        print(f"{status_emoji} {method} {url} -> {result['status']}")
+        if result["status"] == 200:
+            print(f"   Response: {result['text'][:100]}...")
+    
+    # Test auth endpoints (original paths)
+    print("\n🔐 AUTH ENDPOINTS (Original Paths)")
+    auth_endpoints = [
+        (f"{base_url}/auth/token", "POST"),
+        (f"{base_url}/auth/users/me", "GET"),
+        (f"{base_url}/auth/admin/users", "GET"),
+        (f"{base_url}/auth/health", "GET"),
+    ]
+    
+    for url, method in auth_endpoints:
+        result = test_endpoint(url, method)
+        status_emoji = "✅" if isinstance(result["status"], int) and result["status"] < 500 else "❌"
+        print(f"{status_emoji} {method} {url} -> {result['status']}")
+    
+    # Test auth endpoints (updated paths)
+    print("\n🔐 AUTH ENDPOINTS (Root Level Paths)")
+    root_auth_endpoints = [
+        (f"{base_url}/token", "POST"),
+        (f"{base_url}/users/me", "GET"),
+        (f"{base_url}/admin/users", "GET"),
+        (f"{base_url}/developer/permissions", "GET"),
+    ]
+    
+    for url, method in root_auth_endpoints:
+        result = test_endpoint(url, method)
+        status_emoji = "✅" if isinstance(result["status"], int) and result["status"] < 500 else "❌"
+        print(f"{status_emoji} {method} {url} -> {result['status']}")
+    
+    # Test A2A endpoints
+    print("\n🤖 A2A ENDPOINTS")
+    a2a_data = {
+        "jsonrpc": "2.0",
+        "method": "message/send",
+        "params": {"message": {"messageId": "test", "role": "user", "parts": [{"text": "hello"}]}},
+        "id": 1
+    }
+    
+    a2a_result = test_endpoint(f"{base_url}/", "POST", a2a_data, {"Content-Type": "application/json"})
+    status_emoji = "✅" if isinstance(a2a_result["status"], int) else "❌"
+    print(f"{status_emoji} POST {base_url}/ (A2A) -> {a2a_result['status']}")
+    if a2a_result["status"] != "ERROR":
+        print(f"   Response: {a2a_result['text'][:150]}...")
+    
+    # Try to get OpenAPI schema to see all endpoints
+    print("\n📋 DISCOVERING ALL ENDPOINTS")
+    try:
+        openapi_response = requests.get(f"{base_url}/openapi.json", timeout=5)
+        if openapi_response.status_code == 200:
+            openapi_data = openapi_response.json()
+            paths = openapi_data.get("paths", {})
+            print(f"Found {len(paths)} endpoint paths:")
+            for path in sorted(paths.keys()):
+                methods = list(paths[path].keys())
+                print(f"  {path} -> {', '.join(methods).upper()}")
+        else:
+            print(f"❌ Could not get OpenAPI schema: {openapi_response.status_code}")
+    except Exception as e:
+        print(f"❌ Error getting OpenAPI schema: {e}")
+    
+    print("\n" + "=" * 60)
+    print("🎯 DIAGNOSIS:")
+    print("1. If you see 404s for all auth endpoints -> Routes not mounted")
+    print("2. If you see different status codes -> Routes exist but might need different paths")
+    print("3. If A2A endpoint works -> Server is running, just missing auth routes")
+    print("4. Check the 'DISCOVERING ALL ENDPOINTS' section to see what's actually available")
 
 if __name__ == "__main__":
-    print("Make sure your A2A server is NOT running for the first test")
-    print("Then start it for the second test")
-    print()
-    
-    # First inspect the A2A library capabilities
-    if inspect_a2a_application():
-        print("\n" + "=" * 40)
-        input("Now start your A2A server and press Enter...")
-        test_a2a_server_routes()
-    else:
-        print("Failed to inspect A2A library")
+    main()
