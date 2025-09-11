@@ -17,6 +17,9 @@ from api.middleware import A2AAuthContextMiddleware
 logger = logging.getLogger(__name__)
 
 
+
+
+
 class A2ASecurityWrapper:
     """
     Enterprise security wrapper for A2A applications.
@@ -61,6 +64,11 @@ class A2ASecurityWrapper:
             redoc_url="/redoc",
             openapi_url="/openapi.json"
         )
+
+        from api.routes import create_main_api_router
+        main_api_router = create_main_api_router()
+        app.include_router(main_api_router)
+        logger.info("SSE streaming endpoints enabled at /api/v1/streaming")
 
         # Add CORS middleware if enabled
         if enable_cors:

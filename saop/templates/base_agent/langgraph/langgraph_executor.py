@@ -1,15 +1,18 @@
-# langgraph/langgraph_executor.py (fixed with interactive CLI)
+# langgraph/langgraph_executor.py - Handle role resolution internally
 import asyncio
 import uuid
+import sys
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events.event_queue import EventQueue
 from langgraph.agent_factory import AgentFactory
 from agent2agent.a2a_tasks import A2ATask
 from agent2agent.a2a_utils import create_cancellation_event
+from config.agent_config import load_env_config
 
 class LangGraphA2AExecutor(AgentExecutor):
-    def __init__(self, role_name: str = "recieving_blanket"):
+    def __init__(self, role_name: str = "general_support"):
+        # Role is passed from server, not determined internally
         self.role_name = role_name
         self.factory = AgentFactory()
         self.agent = None
@@ -81,7 +84,6 @@ class LangGraphA2AExecutor(AgentExecutor):
             # Enhanced logging with role info
             role_info = self.agent.get_role_info()
             print(f"Executor '{self.role_name}' initialized successfully with {len(self._tools)} tools: {tool_names}")
-            print(f"Role: {role_info['system_prompt']}")
             
             if self.agent.requires_human_review():
                 print("This role requires human review for certain actions")
@@ -127,7 +129,6 @@ class LangGraphA2AExecutor(AgentExecutor):
                 self._initialization_error = str(e)
                 self._degraded_mode = True
                 print(f"Executor role '{self.role_name}' validation failed: {str(e)}")
-                print(f"Executor '{self.role_name}' running in degraded mode: {str(e)}")
                 return False
             
         except Exception as e:
@@ -135,7 +136,6 @@ class LangGraphA2AExecutor(AgentExecutor):
             self._initialization_error = f"Failed to initialize agent: {str(e)}"
             self._degraded_mode = True
             print(f"Executor '{self.role_name}' runtime error: {str(e)}")
-            print(f"Executor '{self.role_name}' running in degraded mode: {self._initialization_error}")
             return False
 
     def is_initialized(self) -> bool:
@@ -184,9 +184,11 @@ class LangGraphA2AExecutor(AgentExecutor):
         await event_queue.enqueue_event(cancel_event)
         print(f"Executor '{self.role_name}' graceful recovery: Cancellation event published")
 
-    async def run_agent(self, user_text: str):
+    def _ensure_initialized(self):
+        """Ensure agent is initialized or raise error."""
         if not self.is_initialized():
-            error_msg = f"Agent not initialized: {self._initialization_error}"
-            print(f"Execution blocked for '{self.role_name}': {self._initialization_error}")
-            raise RuntimeError(error_msg)
+            raise RuntimeError(f"Agent not initialized: {self._initialization_error}")
+
+    async def run_agent(self, user_text: str):
+        self._ensure_initialized()
         return await self.agent.ainvoke(user_text)

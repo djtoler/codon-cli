@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from typing import List
+from api.streaming import router as streaming_router
 
 from api.auth import (
     auth_provider,
@@ -235,3 +236,22 @@ async def get_task(
         "requested_by": current_user.username,
         "note": "This is a placeholder - implement actual task retrieval logic"
     }
+
+def get_auth_router():
+    """Return the authentication router for use in other modules"""
+    return router
+
+def create_main_api_router():
+    """Create the main API router that includes all sub-routers"""
+    from fastapi import APIRouter
+    
+    # Create main API router
+    main_router = APIRouter(prefix="/api/v1")
+    
+    # Include authentication routes
+    main_router.include_router(router, prefix="/auth", tags=["authentication"])
+    
+    # Include streaming routes  
+    main_router.include_router(streaming_router, prefix="/streaming", tags=["streaming"])
+    
+    return main_router

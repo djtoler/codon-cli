@@ -1,6 +1,6 @@
 # api/middleware.py (fixed version)
 """
-Fixed middleware that properly blocks unauthorized A2A requests.
+middleware that blocks unauthorized A2A requests.
 """
 from typing import Optional
 from fastapi import Request
