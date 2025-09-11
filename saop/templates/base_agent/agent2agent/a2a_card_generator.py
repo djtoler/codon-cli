@@ -7,7 +7,8 @@ Run this file directly to generate agent cards for all roles.
 """
 
 import json
-from typing import Dict, List, Optional, Any
+import yaml
+from typing import Dict, List, Optional, Any, Union
 from pathlib import Path
 
 from config.roles import RoleConfig, get_roles
@@ -50,9 +51,67 @@ except ImportError:
         capabilities: AgentCardCapabilities = Field(default_factory=AgentCardCapabilities)
         security: AgentCardSecurity = Field(default_factory=AgentCardSecurity)
         metadata: Dict[str, Any] = Field(default_factory=dict)
-        supports_authenticated_extended_card: bool = False  # Add this missing field
-        url: str = "http://localhost:9999"  # Add required URL field
-        preferred_transport: str = "JSONRPC"  # Add preferred transport
+        supports_authenticated_extended_card: bool = False
+        url: str = "http://localhost:9999"
+        preferred_transport: str = "JSONRPC"
+
+
+# ---------- YAML Upload Support ----------
+def create_agent_card_from_yaml_content(yaml_content: str) -> AgentCard:
+    """
+    Create an AgentCard from YAML content string.
+    Perfect for frontend file uploads.
+    """
+    try:
+        # Parse YAML content
+        yaml_data = yaml.safe_load(yaml_content)
+        
+        # Validate required fields
+        required_fields = ['name', 'description']
+        for field in required_fields:
+            if field not in yaml_data:
+                raise ValueError(f"Missing required field: {field}")
+        
+        # Create AgentCard with defaults for missing optional fields
+        agent_card_data = {
+            'version': yaml_data.get('version', '1.0.0'),
+            'provider': yaml_data.get('provider', 'User Upload'),
+            'url': yaml_data.get('url', 'http://localhost:9999'),
+            'preferred_transport': yaml_data.get('preferred_transport', 'JSONRPC'),
+            'supports_authenticated_extended_card': yaml_data.get('supports_authenticated_extended_card', False),
+            **yaml_data
+        }
+        
+        # Create and validate AgentCard
+        agent_card = AgentCard(**agent_card_data)
+        
+        # Add upload metadata
+        agent_card.metadata.update({
+            'source': 'yaml_upload',
+            'upload_timestamp': str(Path.cwd()),
+            'validation_status': 'success'
+        })
+        
+        return agent_card
+        
+    except yaml.YAMLError as e:
+        raise ValueError(f"Invalid YAML format: {e}")
+    except Exception as e:
+        raise ValueError(f"Failed to create agent card from YAML: {e}")
+
+
+def create_agent_card_from_yaml_file(yaml_file_path: str) -> AgentCard:
+    """
+    Create an AgentCard from a YAML file path.
+    """
+    try:
+        with open(yaml_file_path, 'r', encoding='utf-8') as f:
+            yaml_content = f.read()
+        return create_agent_card_from_yaml_content(yaml_content)
+    except FileNotFoundError:
+        raise ValueError(f"YAML file not found: {yaml_file_path}")
+    except Exception as e:
+        raise ValueError(f"Failed to read YAML file: {e}")
 
 
 # ---------- Core Mapping Logic ----------
@@ -122,8 +181,8 @@ class AgentCardMapper:
             metadata=metadata
         )
 
-        print("CARD: ", card)
         return card
+
 
 # ---------- Factory Functions ----------
 def create_agent_card_for_role(role_name: str, 
@@ -155,13 +214,56 @@ def create_agent_card_dict_for_role(role_name: str,
 
 def generate_agent_card_for_executor(executor, 
                                    fallback_yaml_path: str = "a2a_agent_card.yaml",
-                                   config: Optional[AgentCardConfig] = None) -> AgentCard:  # Return AgentCard, not Dict
+                                   config: Optional[AgentCardConfig] = None,
+                                   is_ui_upload: bool = False,
+                                   ui_yaml_content: Optional[str] = None,
+                                   ui_yaml_path: Optional[str] = None) -> AgentCard:
     """
     Primary interface for servers to generate agent cards from executors.
+    Now supports UI YAML uploads!
+    
+    Args:
+        executor: The executor instance
+        fallback_yaml_path: Default fallback YAML path
+        config: Agent card configuration
+        is_ui_upload: If True, use YAML from UI upload instead of role-based generation
+        ui_yaml_content: YAML content as string (for direct upload)
+        ui_yaml_path: Path to uploaded YAML file
     """
     
     card_config = config or get_default_config()
     
+    # Handle UI YAML upload
+    if is_ui_upload:
+        try:
+            print("📤 Processing UI YAML upload...")
+            
+            if ui_yaml_content:
+                # Direct YAML content from frontend
+                agent_card = create_agent_card_from_yaml_content(ui_yaml_content)
+                print("✅ Agent card created from uploaded YAML content")
+            elif ui_yaml_path:
+                # YAML file path from frontend upload
+                agent_card = create_agent_card_from_yaml_file(ui_yaml_path)
+                print(f"✅ Agent card created from uploaded YAML file: {ui_yaml_path}")
+            else:
+                raise ValueError("UI upload mode requires either ui_yaml_content or ui_yaml_path")
+            
+            # Add executor metadata for UI uploads
+            agent_card.metadata.update({
+                "server_mode": "degraded" if executor.is_degraded() else "full",
+                "source": "ui_upload",
+                "executor_role": executor.role_name if hasattr(executor, 'role_name') else "unknown"
+            })
+            
+            return agent_card
+            
+        except Exception as e:
+            print(f"❌ UI YAML upload failed: {e}")
+            # Fall through to standard role-based generation as fallback
+            print("🔄 Falling back to role-based generation...")
+    
+    # Standard role-based generation
     try:
         print(f"🤖 Generating dynamic agent card for role: {executor.role_name}")
         
@@ -173,38 +275,132 @@ def generate_agent_card_for_executor(executor,
             "server_mode": "degraded" if executor.is_degraded() else "full",
             "initialization_status": "success" if executor.is_initialized() else "degraded",
             "actual_role": executor.role_name,
+            "source": "role_based",
             "initialization_error": executor.get_initialization_error() if executor.is_degraded() else None
         })
         
         print(f"✅ Dynamic agent card generated for '{executor.role_name}'")
-        return agent_card  # Return the object, not dict
+        return agent_card
         
     except Exception as e:
         print(f"⚠️ Failed to generate dynamic agent card: {e}")
         print(f"📄 Falling back to static YAML: {fallback_yaml_path}")
         
-        # Fallback should also return AgentCard object
+        # Final fallback to static YAML
         try:
-            from agent2agent.a2a_utils import create_agent_card_from_yaml_file
-            fallback_card_dict = create_agent_card_from_yaml_file(fallback_yaml_path)
-            
-            # Convert dict to AgentCard object
-            fallback_card = AgentCard(**fallback_card_dict)
+            fallback_card = create_agent_card_from_yaml_file(fallback_yaml_path)
             
             # Add executor metadata
-            try:
-                fallback_card.metadata.update({
-                    "server_mode": "degraded" if executor.is_degraded() else "full",
-                    "fallback_reason": str(e),
-                    "actual_role": executor.role_name
-                })
-            except:
-                pass
+            fallback_card.metadata.update({
+                "server_mode": "degraded" if executor.is_degraded() else "full",
+                "fallback_reason": str(e),
+                "actual_role": executor.role_name,
+                "source": "fallback_yaml"
+            })
                 
             return fallback_card
             
-        except ImportError:
-            raise RuntimeError(f"Dynamic agent card failed and fallback YAML import failed: {e}")
+        except Exception as fallback_error:
+            raise RuntimeError(f"All agent card generation methods failed. Dynamic: {e}, Fallback: {fallback_error}")
+
+
+# ---------- Frontend Helper Functions ----------
+def validate_yaml_for_agent_card(yaml_content: str) -> Dict[str, Any]:
+    """
+    Validate YAML content for agent card creation.
+    Returns validation result for frontend feedback.
+    """
+    result = {
+        "valid": False,
+        "errors": [],
+        "warnings": [],
+        "preview": None
+    }
+    
+    try:
+        # Parse YAML
+        yaml_data = yaml.safe_load(yaml_content)
+        
+        # Check required fields
+        required_fields = ['name', 'description']
+        missing_fields = [field for field in required_fields if field not in yaml_data]
+        
+        if missing_fields:
+            result["errors"].append(f"Missing required fields: {', '.join(missing_fields)}")
+        
+        # Check optional but recommended fields
+        recommended_fields = ['version', 'provider', 'skills']
+        missing_recommended = [field for field in recommended_fields if field not in yaml_data]
+        
+        if missing_recommended:
+            result["warnings"].append(f"Missing recommended fields: {', '.join(missing_recommended)}")
+        
+        # If no errors, create preview
+        if not result["errors"]:
+            try:
+                agent_card = create_agent_card_from_yaml_content(yaml_content)
+                result["valid"] = True
+                result["preview"] = {
+                    "name": agent_card.name,
+                    "description": agent_card.description[:100] + "..." if len(agent_card.description) > 100 else agent_card.description,
+                    "skills_count": len(agent_card.skills),
+                    "version": agent_card.version,
+                    "provider": agent_card.provider
+                }
+            except Exception as e:
+                result["errors"].append(f"Card creation failed: {e}")
+        
+    except yaml.YAMLError as e:
+        result["errors"].append(f"Invalid YAML syntax: {e}")
+    except Exception as e:
+        result["errors"].append(f"Validation error: {e}")
+    
+    return result
+
+
+def create_agent_card_from_upload(file_content: Union[str, bytes], 
+                                filename: str = "upload.yaml") -> Dict[str, Any]:
+    """
+    Create agent card from frontend file upload.
+    Handles both string and bytes content.
+    Returns result suitable for JSON response.
+    """
+    try:
+        # Convert bytes to string if needed
+        if isinstance(file_content, bytes):
+            yaml_content = file_content.decode('utf-8')
+        else:
+            yaml_content = file_content
+        
+        # Validate first
+        validation = validate_yaml_for_agent_card(yaml_content)
+        
+        if not validation["valid"]:
+            return {
+                "success": False,
+                "error": "Validation failed",
+                "validation": validation
+            }
+        
+        # Create agent card
+        agent_card = create_agent_card_from_yaml_content(yaml_content)
+        
+        return {
+            "success": True,
+            "agent_card": agent_card.model_dump(),
+            "validation": validation,
+            "metadata": {
+                "filename": filename,
+                "created_from": "upload"
+            }
+        }
+        
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "validation": {"valid": False, "errors": [str(e)]}
+        }
 
 
 # ---------- Card Generation Functions ----------
