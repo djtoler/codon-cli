@@ -171,7 +171,9 @@ def load_env_config() -> EnvironmentConfig:
         # FastAPI Security Vars
         TOKEN_ENDPOINT=os.environ.get("TOKEN_ENDPOINT", "auth/token"),
         DEFAULT_ADMIN_FULL_NAME=os.environ.get("DEFAULT_ADMIN_FULL_NAME", "Administrator"),
-        DEFAULT_DEV_FULL_NAME=os.environ.get("DEFAULT_DEV_FULL_NAME", "Developer")
+        DEFAULT_DEV_FULL_NAME=os.environ.get("DEFAULT_DEV_FULL_NAME", "Developer"),
+
+        TEMPLATES_DIR=os.environ.get("TEMPLATES_DIR", "frontend/templates")
     )
 
 if __name__ == "__main__":

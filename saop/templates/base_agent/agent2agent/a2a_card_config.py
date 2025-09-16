@@ -1,10 +1,10 @@
-# agent_card_config.py
 """
 Configuration for agent card generation.
 Centralizes tool descriptions and agent card customization.
 """
 
 from typing import Dict, Optional
+from pydantic import BaseModel, HttpUrl
 
 
 # ---------- Tool Bundle Descriptions ----------
@@ -30,14 +30,13 @@ DEFAULT_INDIVIDUAL_TOOL_DESCRIPTIONS: Dict[str, str] = {
 
 
 # ---------- Configuration Class ----------
-class AgentCardConfig:
+class AgentCardConfig(BaseModel):
     """Configuration for agent card generation with customizable descriptions."""
     
-    def __init__(self, 
-                 tool_bundle_descriptions: Optional[Dict[str, str]] = None,
-                 individual_tool_descriptions: Optional[Dict[str, str]] = None):
-        self.tool_bundle_descriptions = tool_bundle_descriptions or DEFAULT_TOOL_DESCRIPTIONS.copy()
-        self.individual_tool_descriptions = individual_tool_descriptions or DEFAULT_INDIVIDUAL_TOOL_DESCRIPTIONS.copy()
+    # Add the missing 'base_url' attribute
+    base_url: str = "http://localhost:9999"
+    tool_bundle_descriptions: Dict[str, str] = DEFAULT_TOOL_DESCRIPTIONS.copy()
+    individual_tool_descriptions: Dict[str, str] = DEFAULT_INDIVIDUAL_TOOL_DESCRIPTIONS.copy()
     
     def get_tool_description(self, tool_name: str) -> str:
         """Get description for an individual tool."""
@@ -70,12 +69,14 @@ def get_default_config() -> AgentCardConfig:
 
 def get_custom_config(
     tool_bundles: Optional[Dict[str, str]] = None,
-    individual_tools: Optional[Dict[str, str]] = None
+    individual_tools: Optional[Dict[str, str]] = None,
+    base_url: str = "http://localhost:9999"
 ) -> AgentCardConfig:
     """Get customized agent card configuration."""
     return AgentCardConfig(
         tool_bundle_descriptions=tool_bundles,
-        individual_tool_descriptions=individual_tools
+        individual_tool_descriptions=individual_tools,
+        base_url=base_url
     )
 
 

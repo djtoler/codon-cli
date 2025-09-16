@@ -29,7 +29,7 @@ class SimpleSSEClient:
         
         # Default credentials from your .env
         self.username = "dev"
-        self.password = "secret"  # The bcrypt hash corresponds to "secret"
+        self.password = "dev123"
         self.api_key = "dev-api-key-12345"
     
     async def __aenter__(self):
@@ -226,7 +226,8 @@ async def main():
         scenarios = [
             ("Calculate the factorial of 8", "math_specialist"),
             ("What is the capital of Japan?", "general_support"),
-            ("Explain machine learning in simple terms", "research_assistant")
+            ("Explain machine learning in simple terms", "research_assistant"),
+            ("Calculate the sum of all prime numbers between 1 and 10,000. For each prime number found, provide a streaming update to the console, showing the number of primes found so far and the current sum.", "math_specialist")
         ]
     
     logger.info("Starting SAOP SSE Test Client")

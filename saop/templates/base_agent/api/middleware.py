@@ -8,6 +8,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
 
 from api.auth import get_current_user, User
+import logging
+logger = logging.getLogger(__name__)
 
 
 class A2AAuthContextMiddleware(BaseHTTPMiddleware):
@@ -16,17 +18,35 @@ class A2AAuthContextMiddleware(BaseHTTPMiddleware):
     """
     
     async def dispatch(self, request: Request, call_next):
+        # Add debug logging for streaming endpoints
+        if "/streaming/" in request.url.path:
+            logger.info(f"MIDDLEWARE DEBUG: {request.method} {request.url.path}")
+            logger.info(f"MIDDLEWARE DEBUG: Query params: {dict(request.query_params)}")
+            logger.info(f"MIDDLEWARE DEBUG: Headers: {dict(request.headers)}")
+        
         # Skip auth for public endpoints
         if self._should_skip_auth_injection(request):
+            if "/streaming/" in request.url.path:
+                logger.info("MIDDLEWARE DEBUG: Skipping auth injection")
             return await call_next(request)
         
         # Extract user from auth headers
         try:
-            current_user = await get_current_user(
-                token=self._extract_bearer_token(request),
-                api_key=self._extract_api_key(request)
-            )
-        except Exception:
+            token = self._extract_bearer_token(request)
+            api_key = self._extract_api_key(request)
+            
+            if "/streaming/" in request.url.path:
+                logger.info(f"MIDDLEWARE DEBUG: Extracted token: {token[:10] if token else None}...")
+                logger.info(f"MIDDLEWARE DEBUG: Extracted API key: {api_key}")
+            
+            current_user = await get_current_user(token=token, api_key=api_key)
+            
+            if "/streaming/" in request.url.path:
+                logger.info(f"MIDDLEWARE DEBUG: Current user: {current_user.username if current_user else None}")
+                
+        except Exception as e:
+            if "/streaming/" in request.url.path:
+                logger.error(f"MIDDLEWARE DEBUG: Auth extraction error: {e}")
             current_user = None
         
         # For A2A endpoints, REQUIRE authentication
@@ -39,7 +59,7 @@ class A2AAuthContextMiddleware(BaseHTTPMiddleware):
                             "code": -32001,
                             "message": "Authentication required for A2A endpoints"
                         },
-                        "id": None  # Fixed: don't call async function
+                        "id": None
                     },
                     status_code=401,
                     headers={"WWW-Authenticate": "Bearer"}
@@ -54,7 +74,7 @@ class A2AAuthContextMiddleware(BaseHTTPMiddleware):
                             "code": -32002,
                             "message": "Insufficient permissions for A2A operations"
                         },
-                        "id": None  # Fixed: don't call async function
+                        "id": None
                     },
                     status_code=403
                 )
@@ -69,7 +89,14 @@ class A2AAuthContextMiddleware(BaseHTTPMiddleware):
                 "auth_method": "API_KEY" if current_user.username.startswith("apikey:") else "JWT"
             }
         
+        if "/streaming/" in request.url.path:
+            logger.info(f"MIDDLEWARE DEBUG: Proceeding to endpoint")
+        
         response = await call_next(request)
+        
+        if "/streaming/" in request.url.path:
+            logger.info(f"MIDDLEWARE DEBUG: Response status: {response.status_code}")
+        
         return response
     
     def _should_skip_auth_injection(self, request: Request) -> bool:
@@ -109,14 +136,32 @@ class A2AAuthContextMiddleware(BaseHTTPMiddleware):
         return any(perm in user_permissions for perm in required_permissions)
     
     def _extract_bearer_token(self, request: Request) -> Optional[str]:
-        """Extract JWT token from Authorization header"""
+        """Extract JWT token from Authorization header OR query parameters"""
+        # First try header (for regular requests)
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             return auth_header[7:]
+        
+        # Fallback to query parameters (for EventSource/SSE requests)
+        token_query = request.query_params.get("token")
+        if token_query:
+            return token_query
+        
         return None
     
     def _extract_api_key(self, request: Request) -> Optional[str]:
-        """Extract API key from configured header"""
+        """Extract API key from configured header OR query parameters"""
         from api.auth import auth_provider
+        
+        # First try header (for regular requests)
         api_key_header = auth_provider.config["API_KEY_HEADER"]
-        return request.headers.get(api_key_header)
+        api_key = request.headers.get(api_key_header)
+        if api_key:
+            return api_key
+        
+        # Fallback to query parameters (for EventSource/SSE requests)
+        api_key_query = request.query_params.get("api_key")
+        if api_key_query:
+            return api_key_query
+        
+        return None

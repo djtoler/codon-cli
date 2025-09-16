@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SAOP Agent</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .login-container {
+            background: #2d2d2d;
+            border-radius: 8px;
+            padding: 40px;
+            width: 100%;
+            max-width: 400px;
+            border: 1px solid #444;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h1 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+        }
+
+        .login-header p {
+            color: #888;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #ccc;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            color: #e0e0e0;
+            font-size: 16px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .login-btn {
+            width: 100%;
+            padding: 12px;
+            background: #4a9eff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .login-btn:hover {
+            background: #3a8eef;
+        }
+
+        .login-btn:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .error-message {
+            background: #2d1a1a;
+            color: #f56565;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            display: none;
+        }
+
+        .api-key-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+        }
+
+        .api-key-section h3 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+            font-size: 16px;
+        }
+
+        .api-key-section p {
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 15px;
+        }
+
+        .demo-credentials {
+            background: #1a2332;
+            border: 1px solid #4a9eff;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 20px;
+        }
+
+        .demo-credentials h4 {
+            color: #4a9eff;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .demo-credentials p {
+            color: #ccc;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .demo-credentials code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 2px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>SAOP Agent Login</h1>
+            <p>Enter your credentials to access the agent console</p>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username:</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="login-btn" id="loginBtn">
+                Sign In
+            </button>
+        </form>
+
+        <div class="api-key-section">
+            <h3>API Key Access</h3>
+            <p>Alternatively, you can access the console directly with an API key</p>
+            
+            <div class="form-group">
+                <label for="apiKey">API Key:</label>
+                <input type="password" id="apiKey" name="apiKey" placeholder="Enter your API key">
+            </div>
+            
+            <button type="button" class="login-btn" id="apiKeyBtn">
+                Access with API Key
+            </button>
+        </div>
+
+        <div class="demo-credentials">
+            <h4>Demo Credentials</h4>
+            <p><strong>Admin:</strong> <code>admin</code> / <code>admin123</code></p>
+            <p><strong>Developer:</strong> <code>dev</code> / <code>dev123</code></p>
+        </div>
+    </div>
+
+    <script>
+        class LoginHandler {
+            constructor() {
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('loginForm').addEventListener('submit', (e) => {
+                    this.handleLogin(e);
+                });
+
+                document.getElementById('apiKeyBtn').addEventListener('click', () => {
+                    this.handleApiKeyAccess();
+                });
+            }
+
+            async handleLogin(e) {
+                e.preventDefault();
+                
+                const loginBtn = document.getElementById('loginBtn');
+                const errorEl = document.getElementById('errorMessage');
+                
+                const formData = new FormData();
+                formData.append('username', document.getElementById('username').value);
+                formData.append('password', document.getElementById('password').value);
+
+                try {
+                    loginBtn.disabled = true;
+                    loginBtn.textContent = 'Signing in...';
+                    errorEl.style.display = 'none';
+
+                    const response = await fetch('/api/v1/auth/token', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Invalid credentials');
+                    }
+
+                    const data = await response.json();
+                    
+                    // Store token in localStorage for the console to use
+                    localStorage.setItem('access_token', data.access_token);
+                    
+                    // Redirect to console
+                    window.location.href = '/console';
+
+                } catch (error) {
+                    errorEl.textContent = error.message;
+                    errorEl.style.display = 'block';
+                } finally {
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = 'Sign In';
+                }
+            }
+
+            handleApiKeyAccess() {
+                const apiKey = document.getElementById('apiKey').value.trim();
+                
+                if (!apiKey) {
+                    const errorEl = document.getElementById('errorMessage');
+                    errorEl.textContent = 'Please enter an API key';
+                    errorEl.style.display = 'block';
+                    return;
+                }
+
+                // Store API key for the console to use
+                localStorage.setItem('api_key', apiKey);
+                
+                // Redirect to console
+                window.location.href = '/console';
+            }
+        }
+
+        // Initialize the login handler
+        document.addEventListener('DOMContentLoaded', () => {
+            new LoginHandler();
+        });
+    </script>
+</body>
+</html>

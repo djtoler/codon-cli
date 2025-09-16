@@ -192,3 +192,7 @@ class LangGraphA2AExecutor(AgentExecutor):
     async def run_agent(self, user_text: str):
         self._ensure_initialized()
         return await self.agent.ainvoke(user_text)
+    
+    async def _run_agent(self, user_text: str):
+        self._ensure_initialized()
+        return await self.agent.ainvoke(user_text)
