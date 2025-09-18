@@ -53,6 +53,7 @@ class AgentComponents:
         }
         client = MultiServerMCPClient(client_config)
         tools = await client.get_tools()
+        # print(tools)
         
         return wrap_tools_with_telemetry(tools)
 
@@ -139,9 +140,11 @@ class AgentTemplate:
 
             else:
                 log.info("Agent decided not to use a tool and will respond directly. 🗣️")
-            
-            # Return the new message to be appended to state
-            return {"messages": [response]}
+            print("---------------------------------------------")
+            log.info(messages)
+            log.info([response])
+            print("---------------------------------------------")
+            return {"messages": messages + [response]}
 
         except Exception as e:
             log.exception("Error calling LLM: %s", e)
@@ -177,12 +180,60 @@ class AgentTemplate:
         )
         return {"messages": [error_msg]}
 
+    # In langgraph_agent.py -> AgentTemplate
+
+    # In langgraph_agent.py -> AgentTemplate
+
+# In langgraph_agent.py -> AgentTemplate
+
     async def ainvoke(self, input_message: str, config: Dict[str, Any] = {}) -> Dict[str, Any]:
+        # This part of the function remains the same
         await self._initialize_components()
-        result = await self._graph.ainvoke(
+        final_state = await self._graph.ainvoke(
             {"messages": [HumanMessage(content=input_message)]}, config
         )
-        return result
+        
+        # --- Corrected result extraction logic ---
+        try:
+            if final_state and "messages" in final_state and final_state["messages"]:
+                messages: List[BaseMessage] = final_state["messages"]
+                print("RESULT*****: ", messages)
+                
+                # Search backwards for the last AIMessage
+                last_ai_message = next((msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None)
 
+                if last_ai_message:
+                    output_content = last_ai_message.content
+                    final_output = {"result": output_content}
+                else:
+                    log.error("No AIMessage found in the final state messages.")
+                    final_output = {"result": "No AI response was generated."}
+            else:
+                log.error("Graph execution finished with an empty or invalid final state.")
+                final_output = {"result": "I was unable to process your request."}
+                
+        except Exception as e:
+            log.error(f"Unexpected error in result extraction: {e}")
+            final_output = {"result": f"Error extracting result: {str(e)}"}
+    
+        print(f"--- FINAL AGENT OUTPUT --- \n{final_output}\n--------------------------")
+        return final_output
+    
     def get_state(self) -> Dict[str, Any]:
         return {}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

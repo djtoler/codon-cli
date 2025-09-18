@@ -63,10 +63,12 @@ class LangGraphA2AExecutor(AgentExecutor):
             except KeyboardInterrupt:
                 print("\nStopping server.")
                 exit(1)
+                
 
     async def initialize(self):
         print(f"Initializing LangGraphA2AExecutor for role: {self.role_name}")
         
+        # First, try to catch TaskGroup exceptions specifically
         try:
             # Create role-based agent using the factory
             self.agent = await self.factory.create_agent(self.role_name)
@@ -90,9 +92,29 @@ class LangGraphA2AExecutor(AgentExecutor):
             
             return True
             
-        except ValueError as e:
-            # Handle invalid role names with interactive prompt
-            if "not found" in str(e).lower():
+        except Exception as e:
+            # Check if this is a TaskGroup exception (ExceptionGroup)
+            if isinstance(e, ExceptionGroup):
+                print(f"=== TASKGROUP EXCEPTION CAUGHT ===")
+                error_details = []
+                
+                for i, exc in enumerate(e.exceptions):
+                    print(f"TaskGroup Exception {i}: {type(exc).__name__}: {exc}")
+                    error_details.append(f"{type(exc).__name__}: {exc}")
+                    
+                    # Print full traceback for each exception
+                    import traceback
+                    print(f"Traceback {i}:")
+                    traceback.print_exception(type(exc), exc, exc.__traceback__)
+                
+                combined_error = "; ".join(error_details)
+                self._initialization_error = f"TaskGroup errors: {combined_error}"
+                self._degraded_mode = True
+                print(f"Executor '{self.role_name}' TaskGroup error: {combined_error}")
+                return False
+                
+            # Handle ValueError (invalid role names)
+            elif isinstance(e, ValueError) and "not found" in str(e).lower():
                 # Extract available roles from error message
                 available_roles = []
                 if "Available roles:" in str(e):
@@ -107,36 +129,28 @@ class LangGraphA2AExecutor(AgentExecutor):
                         except:
                             available_roles = ["general_support", "math_specialist", "research_assistant"]
                 
-                # Get fuzzy match suggestion
-                suggestion = self.suggest_similar_role(self.role_name, available_roles)
+                # For server mode, don't prompt - just use default
+                print(f"⚠️ Role '{self.role_name}' not found. Using 'general_support' instead.")
+                print(f"Available roles: {available_roles}")
                 
-                # Prompt user for action
-                chosen_role = self.prompt_user_for_action(self.role_name, available_roles, suggestion)
+                # Try with general_support role
+                self.role_name = "general_support"
+                return await self.initialize()  # Recursive call with default role
                 
-                if chosen_role is None:
-                    # Degraded mode
-                    self._initialization_error = f"Running in degraded mode - role '{self.role_name}' not found"
-                    self._degraded_mode = True
-                    print(f"Running in degraded mode: {self._initialization_error}")
-                    return False
-                else:
-                    # Try with chosen role
-                    print(f"Using role: {chosen_role}")
-                    self.role_name = chosen_role
-                    return await self.initialize()  # Recursive call with new role
+            # Handle any other exceptions
             else:
-                # Other ValueError
-                self._initialization_error = str(e)
+                import traceback
+                error_msg = f"Failed to initialize agent: {str(e)}"
+                full_traceback = traceback.format_exc()
+                
+                self._initialization_error = error_msg
                 self._degraded_mode = True
-                print(f"Executor role '{self.role_name}' validation failed: {str(e)}")
+                print(f"=== SINGLE EXCEPTION CAUGHT ===")
+                print(f"Executor '{self.role_name}' runtime error: {str(e)}")
+                print(f"Full traceback:\n{full_traceback}")
                 return False
-            
-        except Exception as e:
-            # Handle any other initialization errors
-            self._initialization_error = f"Failed to initialize agent: {str(e)}"
-            self._degraded_mode = True
-            print(f"Executor '{self.role_name}' runtime error: {str(e)}")
-            return False
+
+
 
     def is_initialized(self) -> bool:
         """Check if the executor was successfully initialized"""

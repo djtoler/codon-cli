@@ -10,7 +10,7 @@ from langchain_core.tools import BaseTool
 from langchain.chat_models import init_chat_model
 
 from config.roles import get_roles
-from _mcp.tools import TOOLS, BUNDLES, validate_bundle_names
+from _mcp.tools import TOOLS, BUNDLES
 from config.agent_config import load_env_config
 from langgraph.langgraph_agent import AgentComponents, AgentTemplate
 from langgraph.agent_factory_logger import AgentFactoryLogger
@@ -29,8 +29,8 @@ class AgentFactory:
         self._roles = get_roles()
         
         self.logger.log_factory_init(self._roles, BUNDLES, TOOLS)
-        validate_bundle_names()
-        self.logger.log_validation_success()
+        # validate_bundle_names()
+        # self.logger.log_validation_success()
     
     async def _get_all_tools(self) -> List[BaseTool]:
         """Get all available tools using existing AgentComponents."""

@@ -46,7 +46,7 @@ class A2ATask:
             final_response = await self.executor._run_agent(user_text)
             
             # Get the final message from the graph's output
-            final_agent_message = final_response.get("messages", [])[-1]
+            final_agent_message = final_response['result']
 
             # Convert to an A2A Message without any custom synthesis logic
             synthesized_text = ""
@@ -73,6 +73,8 @@ class A2ATask:
                 final=True,
             )
             await self.event_queue.enqueue_event(success_event)
+            print("FINAL RESPONSE: ", final_response)
+            return final_response
             
         except Exception as e:
             print(f"An unexpected error occurred in executor: {e}")

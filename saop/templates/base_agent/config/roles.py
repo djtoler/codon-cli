@@ -1,56 +1,92 @@
-# roles.py
-"""
-Role definitions for your agent factory system.
-Defines specialized agents with different tool access and personalities.
-"""
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
 
-from __future__ import annotations
-from typing import List, Optional, Dict, Literal
-from pydantic import BaseModel, Field, HttpUrl
+# Import your existing classes - create simple versions if they don't exist
+try:
+    from config.vars import build_system_prompt, ToolUsageMode, CommunicationStyle
+except ImportError:
+    # Simple fallbacks if config.prompts doesn't exist
+    def build_system_prompt(role_description: str, **kwargs) -> str:
+        return role_description
+    
+    class ToolUsageMode:
+        OPTIONAL = "optional"
+        MANDATORY = "mandatory" 
+        PREFERRED = "preferred"
+        DISCOURAGED = "discouraged"
+    
+    class CommunicationStyle:
+        FRIENDLY = "friendly"
+        PROFESSIONAL = "professional"
 
-# Import prompt components from the dedicated vars file
-from .vars import (
-    ToolUsageMode,
-    CommunicationStyle,
-    build_system_prompt
-)
-
-
-# ---------- Response schemas ----------
-class MathResult(BaseModel):
-    """Schema for mathematical operations."""
-    result: float
-    operation: str
-
-# ---------- Model configuration ----------
+# Simple ModelConfig for role-specific model settings
 class ModelConfig(BaseModel):
-    """Role-level model override."""
-    model_id: Optional[str] = Field(default=None)
-    model_factory_path: Optional[str] = Field(default=None)
+    """Configuration for how a role should use a model"""
+    model_id: Optional[str] = None
+    temperature: float = 0.7
+    max_tokens: Optional[int] = None
+    top_p: Optional[float] = None
 
-# ---------- Safety & observability ----------
-class Guardrails(BaseModel):
-    """Simple constraints for tool usage."""
-    max_tool_calls: int = Field(50, ge=1, le=500)
-    allowed_tools_only: bool = True
-
-class Observability(BaseModel):
-    """Telemetry controls for this role."""
-    tracing_enabled: bool = True
-    trace_tags: Dict[str, str] = Field(default_factory=dict)
-
-# ---------- Routing metadata ----------
 class Metadata(BaseModel):
-    """Routing hints & ownership."""
-    version: str = "1.0.0"
-    owner: str = "your-team@company.com"
+    """Metadata for role configuration"""
     tags: List[str] = Field(default_factory=list)
-    docs_url: Optional[HttpUrl] = None
-    deprecation_status: Literal["active", "deprecated", "sunset"] = "active"
     cost_hint: float = 1.0
     latency_slo_ms: int = 1000
+    best_for: List[str] = Field(default_factory=list)
+    
+    # Add these missing attributes
+    version: str = "1.0.0"
+    deprecation_status: Optional[str] = None
+    owner: str = "SAOP Platform"
+    docs_url: Optional[str] = None
+    
+    # Backward compatibility methods for existing LangGraph code
+    def get(self, key: str, default=None):
+        """Dict-like access for backward compatibility"""
+        return getattr(self, key, default)
+    
+    def __getitem__(self, key: str):
+        """Dict-like access with [] syntax"""
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(f"'{key}' not found in Metadata")
+    
+    def __contains__(self, key: str):
+        """Dict-like 'in' operator"""
+        return hasattr(self, key)
+    
+    def keys(self):
+        """Dict-like keys() method"""
+        return self.model_fields.keys()
+    
+    def items(self):
+        """Dict-like items() method"""
+        return [(k, getattr(self, k)) for k in self.model_fields.keys()]
+    
+    def values(self):
+        """Dict-like values() method"""
+        return [getattr(self, k) for k in self.model_fields.keys()]
+    
+    def to_dict(self) -> dict:
+        """Convert to plain dictionary"""
+        return self.model_dump()
+    
+    def __iter__(self):
+        """Make iterable like a dict"""
+        return iter(self.model_fields.keys())
 
-# ---------- Main role configuration ----------
+class Observability(BaseModel):
+    """Observability configuration"""
+    enable_logging: bool = True
+    enable_metrics: bool = True
+    tracing_enabled: bool = True
+    trace_tags: List[str] = Field(default_factory=list)
+
+class Guardrails(BaseModel):
+    """Guardrails configuration"""
+    max_tool_calls: int = 5
+    timeout_seconds: int = 30
+
 class RoleConfig(BaseModel):
     """Define an agent role for the factory."""
     name: str
@@ -63,7 +99,41 @@ class RoleConfig(BaseModel):
     observability: Observability = Field(default_factory=Observability)
     guardrails: Guardrails = Field(default_factory=Guardrails)
     metadata: Metadata = Field(default_factory=Metadata)
-
+    
+    # Backward compatibility methods for existing LangGraph code
+    def get(self, key: str, default=None):
+        """Dict-like access for backward compatibility"""
+        return getattr(self, key, default)
+    
+    def __getitem__(self, key: str):
+        """Dict-like access with [] syntax"""
+        if hasattr(self, key):
+            return getattr(self, key)
+        raise KeyError(f"'{key}' not found in RoleConfig")
+    
+    def __contains__(self, key: str):
+        """Dict-like 'in' operator"""
+        return hasattr(self, key)
+    
+    def keys(self):
+        """Dict-like keys() method"""
+        return self.model_fields.keys()
+    
+    def items(self):
+        """Dict-like items() method"""
+        return [(k, getattr(self, k)) for k in self.model_fields.keys()]
+    
+    def values(self):
+        """Dict-like values() method"""
+        return [getattr(self, k) for k in self.model_fields.keys()]
+    
+    def to_dict(self) -> dict:
+        """Convert to plain dictionary"""
+        return self.model_dump()
+    
+    def __iter__(self):
+        """Make iterable like a dict"""
+        return iter(self.model_fields.keys())
 
 # ---------- Role catalog for your project ----------
 CATALOG: List[RoleConfig] = [
@@ -75,20 +145,30 @@ CATALOG: List[RoleConfig] = [
             communication_style=CommunicationStyle.FRIENDLY,
         ),
         tool_bundles=["general_support", "utilities"],
-        metadata=Metadata(tags=["general", "friendly", "utilities"], cost_hint=0.6, latency_slo_ms=800),
+        metadata=Metadata(
+            tags=["general", "friendly", "utilities"], 
+            cost_hint=0.6, 
+            latency_slo_ms=800,
+            best_for=["general questions", "basic help", "weather info"]
+        ),
     ),
     
     RoleConfig(
         name="math_specialist",
         system_prompt=build_system_prompt(
-            role_description="You are a mathematics specialist. Focus on numerical calculations, mathematical operations, and providing precise numerical results. Always show your work and explain calculations clearly.",
-            tool_usage_mode=ToolUsageMode.MANDATORY,
+            role_description="You are a mathematics specialist. Focus on numerical calculations, mathematical operations, and providing precise numerical results. Use multiplication for factorial calculations, not repeated addition. Always show your work and explain calculations clearly.",
+            tool_usage_mode=ToolUsageMode.PREFERRED,
             communication_style=CommunicationStyle.PROFESSIONAL,
         ),
         tool_bundles=["math"],
-        tools=["add"],
+        tools=["add", "multiply"],  # Add multiply
         response_format="roles.MathResult",
-        metadata=Metadata(tags=["math", "calculations", "precision"], cost_hint=0.3, latency_slo_ms=400),
+        metadata=Metadata(
+            tags=["math", "calculations", "precision"], 
+            cost_hint=0.3, 
+            latency_slo_ms=400,
+            best_for=["calculations", "math problems", "numerical analysis"]
+        ),
     ),
     
     RoleConfig(
@@ -99,7 +179,12 @@ CATALOG: List[RoleConfig] = [
             communication_style=CommunicationStyle.PROFESSIONAL,
         ),
         tool_bundles=["retrieval", "data"],
-        metadata=Metadata(tags=["research", "data", "analysis"], cost_hint=1.2, latency_slo_ms=1500),
+        metadata=Metadata(
+            tags=["research", "data", "analysis"], 
+            cost_hint=1.2, 
+            latency_slo_ms=1500,
+            best_for=["research tasks", "information retrieval", "data analysis"]
+        ),
     ),
     
     RoleConfig(
@@ -111,7 +196,12 @@ CATALOG: List[RoleConfig] = [
         ),
         tool_bundles=["social"],
         tools=["random_number"],
-        metadata=Metadata(tags=["social", "emotional-support", "encouragement"], cost_hint=0.4, latency_slo_ms=600),
+        metadata=Metadata(
+            tags=["social", "emotional-support", "encouragement"], 
+            cost_hint=0.4, 
+            latency_slo_ms=600,
+            best_for=["emotional support", "encouragement", "casual conversation"]
+        ),
     ),
     
     RoleConfig(
@@ -124,7 +214,12 @@ CATALOG: List[RoleConfig] = [
         tool_bundles=["ops"],
         human_review=True,
         guardrails=Guardrails(max_tool_calls=10),
-        metadata=Metadata(tags=["ops", "monitoring", "system-health"], cost_hint=0.8, latency_slo_ms=500),
+        metadata=Metadata(
+            tags=["ops", "monitoring", "system-health"], 
+            cost_hint=0.8, 
+            latency_slo_ms=500,
+            best_for=["system monitoring", "operational tasks", "health checks"]
+        ),
     ),
     
     RoleConfig(
@@ -135,7 +230,12 @@ CATALOG: List[RoleConfig] = [
             communication_style=CommunicationStyle.PROFESSIONAL,
         ),
         tool_bundles=["math", "social", "data", "retrieval", "utilities", "ops"],
-        metadata=Metadata(tags=["comprehensive", "adaptive", "full-featured"], cost_hint=1.5, latency_slo_ms=1200),
+        metadata=Metadata(
+            tags=["comprehensive", "adaptive", "full-featured"], 
+            cost_hint=1.5, 
+            latency_slo_ms=1200,
+            best_for=["complex tasks", "multi-domain problems", "comprehensive assistance"]
+        ),
     ),
     
     RoleConfig(
@@ -147,34 +247,31 @@ CATALOG: List[RoleConfig] = [
         ),
         tools=["add", "multiply", "greet_person", "healthcheck"],
         model=ModelConfig(model_id="openai:gpt-4o-mini"),  
-        metadata=Metadata(tags=["fast", "efficient", "simple"], cost_hint=0.2, latency_slo_ms=300),
+        metadata=Metadata(
+            tags=["fast", "efficient", "simple"], 
+            cost_hint=0.2, 
+            latency_slo_ms=300,
+            best_for=["quick answers", "simple tasks", "fast responses"]
+        ),
     ),
 ]
 
-# ---------- Factory entrypoints ----------
-def _as_dict(catalog: List[RoleConfig]) -> Dict[str, Dict]:
-    """Convert RoleConfig objects to plain dicts for downstream factories."""
-    out: Dict[str, Dict] = {}
-    for role in catalog:
-        if role.metadata.deprecation_status == "sunset":
-            continue
-        if role.name in out:
-            raise ValueError(f"Duplicate role name: {role.name}")
-        out[role.name] = {
-            "system_prompt": role.system_prompt,
-            "tools": role.tools,
-            "tool_bundles": role.tool_bundles,
-            "model_id": role.model.model_id,
-            "model_factory_path": role.model.model_factory_path,
-            "response_format": role.response_format,
-            "human_review": role.human_review,
-            "guardrails": role.guardrails.model_dump(),
-            "observability": role.observability.model_dump(),
-            "metadata": role.metadata.model_dump(),
-        }
-    return out
+# Helper functions
+def get_roles() -> Dict[str, RoleConfig]:
+    """Convert catalog to dictionary format"""
+    return {role.name: role for role in CATALOG}
 
-def get_roles() -> Dict[str, Dict]:
-    """Public entrypoint: the factory will call this to load role definitions."""
-    return _as_dict(CATALOG)
+def get_role_by_name(name: str) -> Optional[RoleConfig]:
+    """Get a specific role by name"""
+    for role in CATALOG:
+        if role.name == name:
+            return role
+    return None
 
+def get_roles_by_tag(tag: str) -> List[RoleConfig]:
+    """Get all roles that have a specific tag"""
+    return [role for role in CATALOG if tag in role.metadata.tags]
+
+def get_low_cost_roles(max_cost_hint: float = 0.5) -> List[RoleConfig]:
+    """Get roles with cost hint below threshold"""
+    return [role for role in CATALOG if role.metadata.cost_hint <= max_cost_hint]

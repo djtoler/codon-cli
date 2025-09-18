@@ -50,7 +50,7 @@ class A2ASecurityWrapper:
         templates_dir.mkdir(exist_ok=True)
         static_dir.mkdir(exist_ok=True)
         
-        app.mount("frontend/static", StaticFiles(directory=str(static_dir)), name="static")
+        app.mount("/frontend/static", StaticFiles(directory=str(static_dir)), name="static")
         
         templates = Jinja2Templates(directory=str(templates_dir))
         

@@ -173,6 +173,7 @@ class SimpleSSEClient:
             
         elif event_type == 'completion':
             result = data.get('result', 'No result')
+            print(result, "data: ", data)
             logger.info(f"[{timestamp}] COMPLETED: {result[:100]}...")
             
         elif event_type == 'error':

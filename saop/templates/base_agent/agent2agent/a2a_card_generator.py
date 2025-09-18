@@ -243,9 +243,8 @@ def create_agent_card_for_role(
             f"Role '{role_name}' not found. Available roles: {available_roles}"
         )
 
-    # Convert dict back to RoleConfig for mapping
-    role_data = roles[role_name]
-    role_config = RoleConfig(name=role_name, **role_data)
+    # The role_data is already a RoleConfig object, no need to recreate it
+    role_config = roles[role_name]
 
     mapper = AgentCardMapper(config)
     return mapper.map_role_to_agent_card(role_config)

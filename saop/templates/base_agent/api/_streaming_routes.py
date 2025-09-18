@@ -1,3 +1,4 @@
+
 # api/streaming_routes.py
 """
 Clean class-based Server-Sent Events (SSE) streaming endpoints for real-time task execution
@@ -219,28 +220,98 @@ class SSEEventQueue(EventQueue):
             except ValueError:
                 pass
     
+    # Replace your _convert_a2a_to_sse_event method with this defensive version:
+
     def _convert_a2a_to_sse_event(self, a2a_event, task_id: str) -> SSEEvent:
-        """Convert A2A event to SSE event format"""
+        """Convert A2A event to SSE event format with defensive error handling"""
         event_type = "progress"
         data = {}
         
-        if hasattr(a2a_event, 'state'):
-            if a2a_event.state == TaskState.working:
-                event_type = "progress"
-                data = {"status": "working", "message": "Agent is processing your request..."}
-            elif a2a_event.state == TaskState.completed:
-                event_type = "completion"
-                if hasattr(a2a_event, 'status') and hasattr(a2a_event.status, 'message'):
-                    message_parts = a2a_event.status.message.parts
-                    content = " ".join([part.root.text for part in message_parts if part.root.kind == "text"])
-                    data = {"status": "completed", "result": content, "final": True}
-            elif a2a_event.state == TaskState.failed:
-                event_type = "error"
-                error_msg = "Unknown error occurred"
-                if hasattr(a2a_event, 'status') and hasattr(a2a_event.status, 'message'):
-                    message_parts = a2a_event.status.message.parts
-                    error_msg = " ".join([part.root.text for part in message_parts if part.root.kind == "text"])
-                data = {"status": "error", "error": error_msg, "final": True}
+        try:
+            if hasattr(a2a_event, 'state'):
+                if a2a_event.state == TaskState.working:
+                    event_type = "progress"
+                    data = {"status": "working", "message": "Agent is processing your request..."}
+                    
+                elif a2a_event.state == TaskState.completed:
+                    event_type = "completion"
+                    result_content = None
+                    
+                    # Try multiple methods to extract the result
+                    try:
+                        # Method 1: From event status message
+                        if hasattr(a2a_event, 'status') and hasattr(a2a_event.status, 'message'):
+                            if hasattr(a2a_event.status.message, 'parts') and a2a_event.status.message.parts:
+                                for part in a2a_event.status.message.parts:
+                                    if hasattr(part, 'text') and part.text:
+                                        result_content = part.text
+                                        break
+                                    elif hasattr(part, 'root') and hasattr(part.root, 'text'):
+                                        result_content = part.root.text
+                                        break
+                                    elif hasattr(part, 'content'):
+                                        result_content = str(part.content)
+                                        break
+                            
+                            # Fallback: convert entire message to string
+                            if not result_content and hasattr(a2a_event.status, 'message'):
+                                result_content = str(a2a_event.status.message)
+                    
+                    except Exception as e:
+                        logger.warning(f"Error extracting result from event status: {e}")
+                    
+                    # Method 2: Check if task has stored result in active_tasks
+                    if not result_content and task_id in active_tasks:
+                        stored_result = active_tasks[task_id].get('result')
+                        if stored_result:
+                            result_content = stored_result
+                            logger.info(f"Using stored result for task {task_id}")
+                    
+                    # Method 3: Try to get result from event directly
+                    if not result_content:
+                        if hasattr(a2a_event, 'result'):
+                            result_content = str(a2a_event.result)
+                        elif hasattr(a2a_event, 'output'):
+                            result_content = str(a2a_event.output)
+                    
+                    data = {
+                        "status": "completed", 
+                        "result": result_content or "Task completed successfully",
+                        "message": "Task completed successfully",
+                        "final": True
+                    }
+                    
+                elif a2a_event.state == TaskState.failed:
+                    event_type = "error"
+                    error_msg = "Unknown error occurred"
+                    
+                    try:
+                        if hasattr(a2a_event, 'status') and hasattr(a2a_event.status, 'message'):
+                            if hasattr(a2a_event.status.message, 'parts') and a2a_event.status.message.parts:
+                                for part in a2a_event.status.message.parts:
+                                    if hasattr(part, 'text') and part.text:
+                                        error_msg = part.text
+                                        break
+                            else:
+                                error_msg = str(a2a_event.status.message)
+                    except Exception as e:
+                        logger.warning(f"Error extracting error message: {e}")
+                        error_msg = "Error occurred during task execution"
+                    
+                    data = {"status": "error", "error": error_msg, "final": True}
+        
+        except Exception as e:
+            logger.error(f"Error converting A2A event to SSE: {e}")
+            logger.error(f"Event type: {type(a2a_event)}")
+            logger.error(f"Event attributes: {dir(a2a_event) if hasattr(a2a_event, '__dict__') else 'No attributes'}")
+            
+            # Fallback event
+            event_type = "error"
+            data = {
+                "status": "error", 
+                "error": f"Event conversion error: {str(e)}", 
+                "final": True
+            }
         
         return SSEEvent(
             event=event_type,
@@ -268,10 +339,35 @@ class EnhancedA2ATask(A2ATask):
                 "message": "Initializing agent execution..."
             })
             
-            await super().run()
+            result = await super().run()
+            logger.info(f"=== ENHANCED TASK RESULT ===")
+            logger.info(f"Result type: {type(result)}")
+            logger.info(f"Result content: {result}")
+            
+            # Extract the actual result text for the completion event
+            result_text = ""
+            if isinstance(result, dict) and 'result' in result:
+                result_text = result['result']
+            elif isinstance(result, str):
+                result_text = result
+            else:
+                result_text = str(result)
+            
+            # Store in active_tasks (existing logic)
+            task_id = getattr(self.context, 'task_id', None)
+            if task_id and task_id in active_tasks:
+                active_tasks[task_id]['result'] = result_text
+            
+            # EMIT COMPLETION EVENT WITH THE ACTUAL RESULT
+            await self._emit_sse_event("completion", {
+                "result": result_text,
+                "final": True
+            })
             
             if self.stream_traces:
                 await self._emit_trace_event()
+                
+            return result
             
         except Exception as e:
             logger.error(f"Task execution failed: {e}")
@@ -397,78 +493,163 @@ class TaskExecutionService:
             )
     
     async def _execute_task(self, context: RequestContext, agent_role: str, stream_traces: bool, stream_costs: bool):
-        """Execute task with streaming events"""
+        """Execute task with comprehensive error tracking"""
         task_id = getattr(context, 'task_id', None)
         if not task_id:
             logger.error("No task_id in context for execution")
             return
         
         try:
+            logger.info(f"=== TASK EXECUTION START ===")
+            
             # Update status
             if task_id in active_tasks:
                 active_tasks[task_id]["status"] = "executing"
             
-            # Send progress events
+            logger.info(f"Step 1: Sending initialization progress...")
             await self._send_event(task_id, "progress", {
                 "status": "initializing",
                 "message": "Setting up agent..."
             })
             
             # Create and initialize executor
+            logger.info(f"Step 2: Creating executor for role: {agent_role}")
             executor = LangGraphA2AExecutor(role_name=agent_role)
+            
+            logger.info(f"Step 3: Initializing executor...")
             await executor.initialize()
             
+            logger.info(f"Step 4: Sending running progress...")
             await self._send_event(task_id, "progress", {
                 "status": "running",
                 "message": "Agent is processing your request..."
             })
             
-            # Create and execute enhanced task
-            enhanced_task = EnhancedA2ATask(executor, context, self.event_queue, stream_traces, stream_costs)
-            await enhanced_task.run()
+            logger.info(f"Step 5: Creating EnhancedA2ATask...")
+            try:
+                enhanced_task = EnhancedA2ATask(executor, context, self.event_queue, stream_traces, stream_costs)
+                logger.info(f"Step 6: EnhancedA2ATask created successfully")
+            except Exception as e:
+                logger.error(f"ERROR in Step 5 (EnhancedA2ATask creation): {e}")
+                raise
             
-            # Mark as completed
+            logger.info(f"Step 7: Running enhanced_task.run()...")
+            try:
+                result = await enhanced_task.run()
+                logger.info(f"Step 8: enhanced_task.run() completed successfully")
+                logger.info(f"Step 8: Result type: {type(result)}, content: {str(result)[:100]}...")
+            except Exception as e:
+                logger.error(f"ERROR in Step 7 (enhanced_task.run()): {e}")
+                import traceback
+                logger.error(f"Step 7 traceback: {traceback.format_exc()}")
+                raise
+            
+            logger.info(f"Step 9: Updating task status to completed...")
+            try:
+                if task_id in active_tasks:
+                    active_tasks[task_id]["status"] = "completed"
+                    if hasattr(enhanced_task, 'final_result') and enhanced_task.final_result:
+                        active_tasks[task_id]["result"] = enhanced_task.final_result
+                logger.info(f"Step 10: Task status updated successfully")
+            except Exception as e:
+                logger.error(f"ERROR in Step 9 (status update): {e}")
+                raise
+            
+            logger.info(f"Step 11: Sending completion event...")
+            try:
+                await self._send_event(task_id, "completion", {
+                    "status": "completed",
+                    "message": "Task completed successfully",
+                    "final": True
+                })
+                logger.info(f"Step 12: Completion event sent successfully")
+            except Exception as e:
+                logger.error(f"ERROR in Step 11 (completion event): {e}")
+                import traceback
+                logger.error(f"Step 11 traceback: {traceback.format_exc()}")
+                raise
+            
+            logger.info(f"=== TASK EXECUTION COMPLETED SUCCESSFULLY ===")
+            
+        except IndexError as e:
+            logger.error(f"=== LIST INDEX ERROR CAUGHT IN _execute_task ===")
+            logger.error(f"IndexError: {e}")
+            import traceback
+            logger.error(f"Full IndexError traceback:\n{traceback.format_exc()}")
+            
+            # Find which step failed
+            import sys
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            logger.error(f"Error details: {exc_type.__name__}: {exc_value}")
+            
             if task_id in active_tasks:
-                active_tasks[task_id]["status"] = "completed"
+                active_tasks[task_id]["status"] = "failed"
+                active_tasks[task_id]["error"] = f"IndexError: {str(e)}"
             
-            await self._send_event(task_id, "completion", {
-                "status": "completed",
-                "message": "Task completed successfully",
+            await self._send_event(task_id, "error", {
+                "status": "error", 
+                "error": f"IndexError: {str(e)}",
                 "final": True
             })
             
         except Exception as e:
-            logger.error(f"Task execution failed for {task_id}: {e}")
+            logger.error(f"=== OTHER ERROR IN _execute_task ===")
+            logger.error(f"Error: {e}")
+            import traceback
+            logger.error(f"Full traceback:\n{traceback.format_exc()}")
             
             if task_id in active_tasks:
                 active_tasks[task_id]["status"] = "failed"
                 active_tasks[task_id]["error"] = str(e)
             
             await self._send_event(task_id, "error", {
+                "status": "error",
                 "error": str(e),
                 "final": True
             })
-    
+        
     async def _send_event(self, task_id: str, event_type: str, data: Dict[str, Any]):
-        """Send SSE event to subscribers"""
-        event = SSEEvent(
-            event=event_type,
-            data=data,
-            timestamp=datetime.utcnow(),
-            task_id=task_id
-        )
-        
-        await self.event_queue._broadcast_to_subscribers(task_id, event)
-        
-        # Update task status
-        if task_id in active_tasks:
-            if event_type == "completion":
-                active_tasks[task_id]["status"] = "completed"
-            elif event_type == "error":
-                active_tasks[task_id]["status"] = "failed"
-            elif event_type == "progress":
-                active_tasks[task_id]["status"] = "executing"
-
+        """Send SSE event with debug logging"""
+        try:
+            logger.info(f"SEND_EVENT: Creating event {event_type} for task {task_id}")
+            
+            event = SSEEvent(
+                event=event_type,
+                data=data,
+                timestamp=datetime.utcnow(),
+                task_id=task_id
+            )
+            
+            logger.info(f"SEND_EVENT: Broadcasting event to subscribers...")
+            await self.event_queue._broadcast_to_subscribers(task_id, event)
+            logger.info(f"SEND_EVENT: Event broadcast completed")
+            
+            # Update task status
+            if task_id in active_tasks:
+                if event_type == "completion":
+                    active_tasks[task_id]["status"] = "completed"
+                elif event_type == "error":
+                    active_tasks[task_id]["status"] = "failed"
+                elif event_type == "progress":
+                    active_tasks[task_id]["status"] = "executing"
+            
+            logger.info(f"SEND_EVENT: Event {event_type} processing completed")
+            
+        except IndexError as e:
+            logger.error(f"=== LIST INDEX ERROR IN _send_event ===")
+            logger.error(f"Event type: {event_type}, Task ID: {task_id}")
+            logger.error(f"IndexError: {e}")
+            import traceback
+            logger.error(f"_send_event IndexError traceback:\n{traceback.format_exc()}")
+            raise
+            
+        except Exception as e:
+            logger.error(f"=== ERROR IN _send_event ===") 
+            logger.error(f"Event type: {event_type}, Task ID: {task_id}")
+            logger.error(f"Error: {e}")
+            import traceback
+            logger.error(f"_send_event traceback:\n{traceback.format_exc()}")
+            raise
 
 class TaskListService:
     """Handles task listing and filtering"""
