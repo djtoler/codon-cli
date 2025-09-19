@@ -2,6 +2,7 @@
 import asyncio
 import uuid
 import sys
+import os
 from a2a.server.agent_execution import AgentExecutor
 from a2a.server.agent_execution.context import RequestContext
 from a2a.server.events.event_queue import EventQueue
@@ -9,15 +10,47 @@ from langgraph.agent_factory import AgentFactory
 from agent2agent.a2a_tasks import A2ATask
 from agent2agent.a2a_utils import create_cancellation_event
 from config.agent_config import load_env_config
+from config.policy.policy_eng import get_main_agent_role_name
+import logging
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("langgraph_executor")
 
 class LangGraphA2AExecutor(AgentExecutor):
-    def __init__(self, role_name: str = "general_support"):
-        # Role is passed from server, not determined internally
-        self.role_name = role_name
+    def __init__(self, role_name: str = None):
+        # Use centralized role determination from policy
+        self.role_name = self._determine_role(role_name)
         self.factory = AgentFactory()
         self.agent = None
         self._initialization_error = None
         self._degraded_mode = False
+
+    def _determine_role(self, explicit_role: str = None) -> str:
+        """Determine role from: 1) explicit param, 2) main agent policy, 3) env var"""
+        
+        # 1. If explicitly passed, use it
+        if explicit_role:
+            log.info(f"Using explicit role: {explicit_role}")
+            return explicit_role
+        
+        # 2. Get from centralized main agent configuration
+        try:
+            role_name = get_main_agent_role_name()
+            log.info(f"Using main agent role from policy: {role_name}")
+            return role_name
+        except Exception as e:
+            log.error(f"Failed to determine main agent role: {e}")
+            
+        
+        # 3. Try environment variable
+        env_role = os.getenv("AGENT_NAME")
+        if env_role:
+            print(f"Using role from environment: {env_role}")
+            return env_role
+        
+        # 4. No valid role found - this is an error
+        raise ValueError(
+            "No role specified. Set active_role in policy YAML or AGENT_NAME environment variable"
+        )
 
     def suggest_similar_role(self, invalid_role: str, available_roles: list[str]) -> str:
         """Find the most similar role using fuzzy matching"""
@@ -67,6 +100,8 @@ class LangGraphA2AExecutor(AgentExecutor):
 
     async def initialize(self):
         print(f"Initializing LangGraphA2AExecutor for role: {self.role_name}")
+
+        
         
         # First, try to catch TaskGroup exceptions specifically
         try:

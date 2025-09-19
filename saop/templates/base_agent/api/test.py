@@ -225,10 +225,11 @@ async def main():
         ]
     else:
         scenarios = [
-            ("Calculate the factorial of 8", "math_specialist"),
+            ("Calculate 3776629 + 37784", "math_specialist"),
             ("What is the capital of Japan?", "general_support"),
-            ("Explain machine learning in simple terms", "research_assistant"),
-            ("Calculate the sum of all prime numbers between 1 and 10,000. For each prime number found, provide a streaming update to the console, showing the number of primes found so far and the current sum.", "math_specialist")
+            ("How old is Larry Ellison from Oracle?", "research_assistant"),
+            # ("Calculate the sum of all prime numbers between 1 and 10,000. For each prime number found, provide a streaming update to the console, showing the number of primes found so far and the current sum.", "math_specialist")
+            ("Are we healthy?", "")
         ]
     
     logger.info("Starting SAOP SSE Test Client")

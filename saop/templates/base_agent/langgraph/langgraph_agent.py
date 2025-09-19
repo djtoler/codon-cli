@@ -1,9 +1,9 @@
-
 # langgraph_agent.py
 import asyncio
 import copy
 import logging
-from typing import Any, Dict, List, TypedDict
+import os
+from typing import Any, Dict, List, TypedDict, Optional
 
 from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage, AIMessage
 from langchain.chat_models import init_chat_model
@@ -20,6 +20,9 @@ from langgraph.langchain_chains import chains
 from telemetry.langgraph_trace_utils import track_agent
 from _mcp.tools import wrap_tools_with_telemetry
 
+# Policy Engine Integration
+from config.policy.policy_eng import policy_select_model, policy_filter_tools
+
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("langgraph_agent")
 
@@ -28,18 +31,82 @@ class AgentState(MessagesState):
     """Using MessagesState ensures proper message handling"""
     pass
 
-class AgentComponents:
-    def __init__(self):
-        self.env_config = load_env_config()
 
-    def create_llm(self):
-        return init_chat_model(
-            model=self.env_config["MODEL_NAME"],
-            openai_api_key=self.env_config["MODEL_API_KEY"],
-            model_provider=self.env_config["MODEL_PROVIDER"],
-        )
+class PolicyAwareLLM:
+    """Clean wrapper that handles all policy logic for model selection"""
+    
+    def __init__(self, role_name: str, main_agent_config: Any):
+        self.role_name = role_name
+        # Store the main agent config which contains the default model settings
+        self.main_agent_config = main_agent_config
+        self.current_model_config = None
+        self._llm = None
+    
+    def get_llm(self):
+        """Get LLM instance, switching models if policy requires"""
+        
+        # 1. Get the default model configuration from the main agent's settings
+        default_model_config = self.main_agent_config.model
+        
+        # 2. Apply policy to select the final model configuration
+        #    (This function should now return a dictionary)
+        selected_model_config = policy_select_model(self.role_name, default_model_config)
+        
+        # 3. Only recreate the LLM if the configuration has changed
+        if self._llm is None or selected_model_config != self.current_model_config:
+            if self.current_model_config is not None:
+                # Log the specific model name for clarity
+                old_model = self.current_model_config.get('model', 'N/A')
+                new_model = selected_model_config.get('model', 'N/A')
+                log.info(f"Policy model switch for {self.role_name}: {old_model} -> {new_model}")
 
-    async def create_tools(self) -> List[BaseTool]:
+            log.info(f"Initializing model with config: {selected_model_config}")
+            
+            # 4. Unpack the entire config dictionary into init_chat_model.
+            #    Remove the explicit api_key. LangChain will find it in the environment.
+            self._llm = init_chat_model(**selected_model_config)
+            
+            self.current_model_config = selected_model_config
+        
+        return self._llm
+
+
+class PolicyAwareTools:
+    """Clean wrapper that handles all policy logic for tool filtering"""
+    
+    def __init__(self, role_name: str, env_config: dict):
+        self.role_name = role_name
+        self.env_config = env_config
+        self._filtered_tools = None
+        self._all_tools = None
+    
+    async def get_tools(self) -> List[BaseTool]:
+        """Get policy-filtered tools for this role"""
+        if self._filtered_tools is not None:
+            return self._filtered_tools
+        
+        # Get all available tools first
+        if self._all_tools is None:
+            self._all_tools = await self._fetch_all_tools()
+        
+        # Apply policy filtering
+        tool_names = [tool.name for tool in self._all_tools]
+        allowed_tool_names = policy_filter_tools(self.role_name, tool_names)
+        
+        # Filter to allowed tools only
+        self._filtered_tools = [
+            tool for tool in self._all_tools 
+            if tool.name in allowed_tool_names
+        ]
+        
+        if len(self._filtered_tools) != len(self._all_tools):
+            blocked_count = len(self._all_tools) - len(self._filtered_tools)
+            log.info(f"Policy filtered tools for {self.role_name}: {blocked_count} tools blocked by compliance rules")
+        
+        return self._filtered_tools
+    
+    async def _fetch_all_tools(self) -> List[BaseTool]:
+        """Fetch all available tools from MCP servers"""
         client_config = {
             "local_mcp": {"url": self.env_config["MCP_BASE_URL"], "transport": "streamable_http"},
             "github_mcp": {
@@ -53,28 +120,107 @@ class AgentComponents:
         }
         client = MultiServerMCPClient(client_config)
         tools = await client.get_tools()
-        # print(tools)
-        
         return wrap_tools_with_telemetry(tools)
 
 
+class AgentComponents:
+    def __init__(self, main_agent_config: Any, role_name: str = None): # ADJUSTMENT 1: Added main_agent_config
+        self.env_config = load_env_config()
+        self.role_name = self._determine_role_name(role_name)
+        
+        # ADJUSTMENT 2: Pass main_agent_config to PolicyAwareLLM
+        self.policy_llm = PolicyAwareLLM(self.role_name, main_agent_config) 
+        self.policy_tools = PolicyAwareTools(self.role_name, self.env_config)
+    
+    def _determine_role_name(self, role_name: str = None) -> str:
+        """Determine role name from: 1) parameter, 2) policy override, 3) env var, 4) default"""
+        
+        # 1. If explicitly passed, use it
+        if role_name:
+            print("ROLE NAME FROM LG AGENT", role_name)
+            return role_name
+        
+        # 2. Check if policy config specifies a role override
+        try:
+            from config.policy.policy_config import get_policy_config
+            config = get_policy_config()
+            
+            # Check if policy specifies which role to use
+            if hasattr(config, 'system') and hasattr(config.system, 'active_role'):
+                policy_role = config.system.active_role
+                log.info(f"Policy override: using role {policy_role}")
+                return policy_role
+                
+        except Exception as e:
+            log.debug(f"Could not get role override from policy: {e}")
+        
+        # 3. Use environment variable
+        env_role = os.getenv("AGENT_NAME")
+        log.info(f"Using role from environment: {env_role}")
+        return env_role
+
+    def create_llm(self):
+        """Get policy-aware LLM"""
+        return self.policy_llm.get_llm()
+
+    async def create_tools(self) -> List[BaseTool]:
+        """Get policy-filtered tools"""
+        return await self.policy_tools.get_tools()
+
+
 class AgentTemplate:
-    def __init__(self):
+    def __init__(self, role_name: Optional[str] = None):
         self._graph = None
         self._llm = None
         self._tools = None
         self._chains = chains or {}
         self._llm_chain = None
         self._checkpointer = None
+        
+        # Get main agent configuration from policy, not expert roles
+        self.main_agent_config = self._get_main_agent_config()
+        self.role_name = self.main_agent_config.name
+        self._components = None
+
+    def _get_main_agent_config(self):
+        """Get main agent configuration from policy YAML"""
+        try:
+            from config.policy.policy_config import get_policy_config
+            config = get_policy_config()
+            log.info(f"Using main agent config: {config.main_agent.name}")
+            return config.main_agent
+        except Exception as e:
+            log.error(f"Could not get main agent config from policy: {e}")
+            # Fallback to environment-based role determination
+            env_role = os.getenv("AGENT_NAME", "general_support")
+            log.warning(f"Falling back to environment role: {env_role}")
+            
+            # Create minimal config for fallback
+            from types import SimpleNamespace
+            return SimpleNamespace(
+                name=env_role,
+                system_prompt="You are a helpful assistant.",
+                tools=[],
+                tool_bundles=[]
+            )
 
     async def _initialize_components(self):
         if self._graph is not None:
             return
-        components = AgentComponents()
-        self._llm = components.create_llm()
-        self._tools = await components.create_tools()
+        
+        # Create components using main agent role, not expert role lookup
+        self._components = AgentComponents(
+            main_agent_config=self.main_agent_config, 
+            role_name=self.role_name
+        )
+
+        
+        self._llm = self._components.create_llm()
+        self._tools = await self._components.create_tools()
         self._llm_chain = self._llm.bind_tools(self._tools)
         self._init_graph()
+        
+        log.info(f"Main agent '{self.role_name}' initialized with {len(self._tools)} tools")
 
     def _init_graph(self):
         tool_node = ToolNode(self._tools)
@@ -103,14 +249,19 @@ class AgentTemplate:
 
     @track_agent(node_name="_router_node", is_agent=True, agent_role="router")
     async def _router_node(self, state: AgentState, config: RunnableConfig = None) -> Dict[str, Any]:
-        log.info("IN ROUTER NODE")
-        # Just pass through the state without modification
+        log.info("IN ROUTER NODE - Main Agent")
+        # Main agent router - could add routing logic to expert roles here
         return {"messages": state["messages"]}
 
     @track_agent(node_name="_call_model_node", is_agent=True, agent_role="brain")
     async def _call_model_node(self, state: AgentState, config: RunnableConfig = None) -> Dict[str, Any]:
-        log.info("IN CALL MODEL NODE")
+        log.info(f"IN CALL MODEL NODE - Main Agent: {self.role_name}")
         messages = state["messages"]
+        
+        # Refresh LLM (will switch models if policy changed)
+        if self._components:
+            self._llm = self._components.policy_llm.get_llm()
+            self._llm_chain = self._llm.bind_tools(self._tools)
         
         # Debug: Log the message structure
         log.debug(f"Number of messages in state: {len(messages)}")
@@ -131,7 +282,7 @@ class AgentTemplate:
                     tool_name = tool_call['name']
                     tool_args = tool_call['args']
 
-                    log.info(f"🤖 Agent decided to use:")
+                    log.info(f"🤖 Main Agent ({self.role_name}) decided to use:")
                     log.info(f"🛠️ TOOL NAME:  **{tool_name}**")
                     log.info(f"🗣️ TOOL ARGUMENTS: {tool_args}") 
                     matching_tool = next((t for t in self._tools if t.name == tool_name), None)
@@ -139,7 +290,8 @@ class AgentTemplate:
                         log.info(f"📖 TOOL DESCRIPTION: {matching_tool.description}")
 
             else:
-                log.info("Agent decided not to use a tool and will respond directly. 🗣️")
+                log.info(f"Main Agent ({self.role_name}) responding directly without tools.")
+            
             print("---------------------------------------------")
             log.info(messages)
             log.info([response])
@@ -147,13 +299,13 @@ class AgentTemplate:
             return {"messages": messages + [response]}
 
         except Exception as e:
-            log.exception("Error calling LLM: %s", e)
+            log.exception(f"Error in main agent ({self.role_name}) model call: %s", e)
             # Create an error message
             error_msg = AIMessage(content=f"I encountered an error: {str(e)}. Please try again.")
             return {"messages": [error_msg], "error": True}
 
     def _should_continue(self, state: AgentState) -> str:
-        log.info("IN SHOULD CONTINUE")
+        log.info("IN SHOULD CONTINUE - Main Agent")
         messages = state["messages"]
         last = messages[-1]
         
@@ -174,30 +326,25 @@ class AgentTemplate:
 
     @track_agent(node_name="_handle_error_node", is_agent=False)
     async def _handle_error_node(self, state: AgentState, config: RunnableConfig = None) -> Dict[str, Any]:
-        log.info("IN HANDLE ERROR NODE")
+        log.info(f"IN HANDLE ERROR NODE - Main Agent: {self.role_name}")
         error_msg = HumanMessage(
             content="An unexpected error occurred. Please try again or rephrase your request."
         )
         return {"messages": [error_msg]}
 
-    # In langgraph_agent.py -> AgentTemplate
-
-    # In langgraph_agent.py -> AgentTemplate
-
-# In langgraph_agent.py -> AgentTemplate
-
     async def ainvoke(self, input_message: str, config: Dict[str, Any] = {}) -> Dict[str, Any]:
-        # This part of the function remains the same
+        """Main agent invocation - handles the primary conversation flow"""
+        log.info(f"Main agent ({self.role_name}) processing request")
+        
         await self._initialize_components()
         final_state = await self._graph.ainvoke(
             {"messages": [HumanMessage(content=input_message)]}, config
         )
         
-        # --- Corrected result extraction logic ---
+        # Extract result from final state
         try:
             if final_state and "messages" in final_state and final_state["messages"]:
                 messages: List[BaseMessage] = final_state["messages"]
-                print("RESULT*****: ", messages)
                 
                 # Search backwards for the last AIMessage
                 last_ai_message = next((msg for msg in reversed(messages) if isinstance(msg, AIMessage)), None)
@@ -216,24 +363,29 @@ class AgentTemplate:
             log.error(f"Unexpected error in result extraction: {e}")
             final_output = {"result": f"Error extracting result: {str(e)}"}
     
-        print(f"--- FINAL AGENT OUTPUT --- \n{final_output}\n--------------------------")
+        log.info(f"Main agent ({self.role_name}) completed processing")
+        print(f"--- MAIN AGENT ({self.role_name.upper()}) OUTPUT ---")
+        print(f"{final_output}")
+        print("-" * (len(self.role_name) + 25))
+        
         return final_output
     
     def get_state(self) -> Dict[str, Any]:
-        return {}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        """Get current state of the main agent"""
+        return {
+            "role_name": self.role_name,
+            "is_main_agent": True,
+            "tools_count": len(self._tools) if self._tools else 0,
+            "config_source": "policy_main_agent"
+        }
+    
+    def get_main_agent_info(self) -> Dict[str, Any]:
+        """Get information about the main agent configuration"""
+        return {
+            "name": self.main_agent_config.name,
+            "system_prompt": getattr(self.main_agent_config, 'system_prompt', ''),
+            "tools": getattr(self.main_agent_config, 'tools', []),
+            "tool_bundles": getattr(self.main_agent_config, 'tool_bundles', []),
+            "human_review": getattr(self.main_agent_config, 'human_review', False),
+            "metadata": getattr(self.main_agent_config, 'metadata', {})
+        }

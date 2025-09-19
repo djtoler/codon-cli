@@ -267,6 +267,7 @@ class ToolModelManager:
                 tool_type=tool_config['tool_type'],
                 cost=ToolCost(cost_per_call=tool_config['cost_per_call']),
             )
+            print("tool_model!!: ", "COUNT: ", tool_model)
             
             # Add to bundles
             for bundle in tool_config['bundles']:
@@ -471,7 +472,7 @@ class ToolAnalytics:
     
     def __init__(self, tool_model_manager: ToolModelManager):
         self.tool_model_manager = tool_model_manager
-        self.static_tools: Set[str] = {'get_weather', 'add', 'healthcheck'}
+        self.static_tools: Set[str] = {'get_weather', 'add', 'healthcheck', 'multiply'}
     
     def get_comprehensive_stats(self) -> Dict[str, Any]:
         """Get comprehensive statistics across all tools."""
@@ -510,6 +511,7 @@ class ToolAnalytics:
     def _get_origin_stats(self, tool_models: Dict[str, ToolModel]) -> Dict[str, Any]:
         """Get statistics about static vs dynamically created tools."""
         dynamic_tools = set(tool_models.keys()) - self.static_tools
+        print("DYNAMIC TOOLS: ", "COUNT: ", len(dynamic_tools), "Static Tools: ", self.static_tools)
         
         return {
             'static_tools': len(self.static_tools),

@@ -1,0 +1,130 @@
+# SAOP Policy Configuration - PRD Requirements
+# Simple YAML-based policy configuration for model selection and tool access control
+
+version: "1.0"
+
+# System-wide budget settings
+system:
+  monthly_budget_usd: 10000.0
+  budget_warning_threshold: 0.80
+  emergency_budget_threshold: 0.95
+  default_slo_ms: 5000
+  max_execution_time_ms: 30000
+
+# MAIN AGENT ROLE - Single source of truth for what role this system uses
+main_agent:
+  name: "healthcare_agent"
+  system_prompt: "You are a healthcare assistant that helps with medical information, patient care coordination, and health-related tasks. You must comply with HIPAA regulations and only use secure, compliant tools. Always prioritize patient privacy and data security."
+  tools: 
+    - "secure_search"
+    - "internal_database" 
+    - "healthcheck"
+  tool_bundles:
+    - "medical"
+    - "secure"
+  model:
+    # --- CHANGED: 'model_id' split into 'model' and 'model_provider' ---
+    model: "gpt-4o-mini"
+    model_provider: "openai"
+    # -------------------------------------------------------------------
+    temperature: 0.7
+    max_tokens: 2000
+  response_format: null
+  human_review: true
+  observability:
+    enable_logging: true
+    enable_metrics: true
+    tracing_enabled: true
+    trace_tags: ["healthcare", "hipaa"]
+  guardrails:
+    max_tool_calls: 3
+    timeout_seconds: 20
+  metadata:
+    tags: ["healthcare", "hipaa", "medical", "sensitive"]
+    cost_hint: 1.2
+    latency_slo_ms: 2000
+    best_for: ["medical queries", "patient care", "health information"]
+    version: "1.0.0"
+    deprecation_status: null
+    owner: "Healthcare Team"
+    docs_url: "https://docs.example.com/healthcare-agent"
+
+# Model selection policies
+models:
+  # --- CHANGED: Models now use the combined 'provider:model' string format ---
+  # This is a concise alternative format directly supported by init_chat_model.
+  expensive: "openai:gpt-4"
+  standard: "openai:gpt-4o-mini"
+  cheap: "openai:gpt-3.5-turbo"
+  # -------------------------------------------------------------------------
+  # Budget-driven model selection
+  budget_rules:
+    - when_budget_above: 0.80
+      use_model: "cheap"
+      reason: "Budget optimization - over 80%"
+    - when_budget_above: 0.95
+      use_model: "cheap"
+      reason: "Emergency budget protection"
+
+# Tool access control policies
+tools:
+  # Compliance-based tool restrictions
+  compliance_rules:
+    hipaa_compliant:
+      description: "HIPAA compliance for healthcare agents"
+      blocked_tools:
+        - "public_search"
+        - "social_media_*"
+        - "external_api_*"
+      allowed_tools:
+        - "secure_search"
+        - "internal_*"
+        - "hipaa_*"
+        - "healthcheck"      # Allow system health checks
+        - "add"              # Allow basic math
+        - "multiply"         # Allow basic math
+    general:
+      description: "General purpose tool access"
+      blocked_tools: []
+      allowed_tools: ["*"] # All tools allowed
+
+  # Role-specific tool policies
+  role_policies:
+    healthcare_agent:
+      compliance_level: "hipaa_compliant"
+    finance_agent:
+      compliance_level: "hipaa_compliant" # Reuse for financial compliance
+    general_support:
+      compliance_level: "general"
+
+# Cost caps and budgets per role/skill
+budgets:
+  # Per-role monthly cost limits
+  role_limits:
+    healthcare_agent: 800.0    # Add budget for healthcare agent
+    math_specialist: 500.0
+    research_assistant: 800.0
+    full_access: 1000.0
+    general_support: 200.0
+    social_companion: 100.0
+    ops_monitor: 300.0
+    quick_helper: 50.0
+
+# Compliance and audit settings
+compliance:
+  # PHI/PII tagging and retention
+  data_retention_years: 7 # HIPAA requirement
+  require_audit_logs: true
+  # Compliance tags for data handling
+  phi_pii_tags: ["phi", "pii", "medical", "financial"]
+  # Roles that handle sensitive data
+  sensitive_data_roles: ["healthcare_agent", "finance_agent"]
+
+# Operational settings
+operations:
+  # Cache and performance settings
+  decision_cache_ttl_seconds: 60 # Policy decision cache lifetime
+  max_cache_size: 1000 # Maximum cached decisions
+  # Request processing
+  max_tools_per_execution: 10 # Global tool limit
+  tool_timeout_seconds: 30 # Global tool timeout

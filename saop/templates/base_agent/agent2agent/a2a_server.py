@@ -13,6 +13,7 @@ from banner import start_saop_baner
 from agent2agent.a2a_card_generator import generate_agent_card_for_executor
 from config.agent_config import load_env_config
 
+
 # Optional security import
 try:
     from api.wrapper import wrap_a2a_with_security
@@ -21,36 +22,31 @@ except ImportError:
     SECURITY_AVAILABLE = False
 
 
+# Updated A2AServer
 class A2AServer:
-    """A2A server with dynamic agent cards and configurable security."""
+    """A2A server with centralized role configuration."""
     
     def __init__(self):
         self.config = load_env_config()
-        self.role_name = self._determine_role()  # Server determines role
+        self.role_name = None  # Will be determined from policy
         self.executor = None
         self.app = None
         
-    def _determine_role(self) -> str:
-        """Determine role from command line args, environment, or defaults."""
-        import sys
-        
-        # Priority 1: Command line argument
-        if len(sys.argv) > 1:
-            return sys.argv[1]
-        
-        # Priority 2: Environment variable
-        role_from_env = self.config.get("AGENT_ROLE")
-        if role_from_env:
-            return role_from_env
-        
-        # Priority 3: Default
-        return "general_support"
-        
     async def initialize(self):
-        print(f"🚀 Setting up LangGraph agent for role: {self.role_name}")
+        """Initialize server with role from policy configuration"""
         
-        # Pass role to executor
-        self.executor = LangGraphA2AExecutor(role_name=self.role_name)
+        # Get role from centralized policy configuration
+        try:
+            from config.policy.policy_eng import get_main_agent_role_name
+            self.role_name = get_main_agent_role_name()
+            print(f"🚀 Setting up LangGraph agent for role: {self.role_name}")
+        except Exception as e:
+            print(f"❌ Failed to determine main agent role: {e}")
+            print("💡 Configure main_agent.name in policy YAML or set AGENT_NAME environment variable")
+            raise
+        
+        # Pass role to executor (it will use the same policy logic)
+        self.executor = LangGraphA2AExecutor()  # No role_name needed - uses policy
         success = await self.executor.initialize()
         
         if not success:
@@ -59,7 +55,7 @@ class A2AServer:
         
         print(f"🎭 Using role: {self.executor.role_name}")  # Show what role was determined
         
-        # Generate dynamic agent card - gets role from executor
+        # Generate dynamic agent card - automatically detects main agent vs expert role
         agent_card = generate_agent_card_for_executor(self.executor)
         
         # Create A2A application
