@@ -21,7 +21,8 @@ from telemetry.langgraph_trace_utils import track_agent
 from _mcp.tools import wrap_tools_with_telemetry
 
 # Policy Engine Integration
-from config.policy.policy_eng import policy_select_model, policy_filter_tools
+from config.policy.policy_eng import policy_select_model, policy_filter_tools, get_policy_engine
+
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("langgraph_agent")
@@ -32,12 +33,50 @@ class AgentState(MessagesState):
     pass
 
 
+# class PolicyAwareLLM:
+#     """Clean wrapper that handles all policy logic for model selection"""
+    
+#     def __init__(self, role_name: str, main_agent_config: Any):
+#         self.role_name = role_name
+#         # Store the main agent config which contains the default model settings
+#         self.main_agent_config = main_agent_config
+#         self.current_model_config = None
+#         self._llm = None
+    
+#     def get_llm(self):
+#         """Get LLM instance, switching models if policy requires"""
+        
+#         # 1. Get the default model configuration from the main agent's settings
+#         default_model_config = self.main_agent_config.model
+        
+#         # 2. Apply policy to select the final model configuration
+#         #    (This function should now return a dictionary)
+#         selected_model_config = policy_select_model(self.role_name, default_model_config)
+        
+#         # 3. Only recreate the LLM if the configuration has changed
+#         if self._llm is None or selected_model_config != self.current_model_config:
+#             if self.current_model_config is not None:
+#                 # Log the specific model name for clarity
+#                 old_model = self.current_model_config.get('model', 'N/A')
+#                 new_model = selected_model_config.get('model', 'N/A')
+#                 log.info(f"Policy model switch for {self.role_name}: {old_model} -> {new_model}")
+
+#             log.info(f"Initializing model with config: {selected_model_config}")
+            
+#             # 4. Unpack the entire config dictionary into init_chat_model.
+#             #    Remove the explicit api_key. LangChain will find it in the environment.
+#             self._llm = init_chat_model(**selected_model_config)
+            
+#             self.current_model_config = selected_model_config
+        
+#         return self._llm
+
+
 class PolicyAwareLLM:
     """Clean wrapper that handles all policy logic for model selection"""
     
     def __init__(self, role_name: str, main_agent_config: Any):
         self.role_name = role_name
-        # Store the main agent config which contains the default model settings
         self.main_agent_config = main_agent_config
         self.current_model_config = None
         self._llm = None
@@ -48,26 +87,103 @@ class PolicyAwareLLM:
         # 1. Get the default model configuration from the main agent's settings
         default_model_config = self.main_agent_config.model
         
+        # DEBUG: Log what we're starting with
+        log.info(f"=== MODEL SELECTION DEBUG for {self.role_name} ===")
+        log.info(f"Default model config type: {type(default_model_config)}")
+        log.info(f"Default model config value: {default_model_config}")
+        
         # 2. Apply policy to select the final model configuration
-        #    (This function should now return a dictionary)
         selected_model_config = policy_select_model(self.role_name, default_model_config)
+        
+        # DEBUG: Log what policy returned
+        log.info(f"Policy returned type: {type(selected_model_config)}")
+        log.info(f"Policy returned value: {selected_model_config}")
+        
+        # DEBUG: Check if it's the expected dictionary format
+        if isinstance(selected_model_config, dict):
+            log.info("✅ Policy returned dict - checking required keys...")
+            required_keys = ['model', 'model_provider']
+            missing_keys = [key for key in required_keys if key not in selected_model_config]
+            if missing_keys:
+                log.warning(f"❌ Missing required keys: {missing_keys}")
+            else:
+                log.info("✅ All required keys present")
+        elif isinstance(selected_model_config, str):
+            log.warning(f"❌ Policy returned string instead of dict: '{selected_model_config}'")
+            log.warning("This will cause issues when unpacking with **selected_model_config")
+            
+            # Show what would happen if we try to unpack it
+            try:
+                test_unpack = init_chat_model(**selected_model_config)  # This will fail
+            except Exception as e:
+                log.error(f"❌ Unpacking string would fail: {e}")
+        else:
+            log.error(f"❌ Policy returned unexpected type: {type(selected_model_config)}")
+        
+        # DEBUG: Compare with current config
+        if self.current_model_config is not None:
+            log.info(f"Current model config: {self.current_model_config}")
+            config_changed = selected_model_config != self.current_model_config
+            log.info(f"Config changed: {config_changed}")
+        else:
+            log.info("No previous config - first initialization")
         
         # 3. Only recreate the LLM if the configuration has changed
         if self._llm is None or selected_model_config != self.current_model_config:
             if self.current_model_config is not None:
-                # Log the specific model name for clarity
-                old_model = self.current_model_config.get('model', 'N/A')
-                new_model = selected_model_config.get('model', 'N/A')
-                log.info(f"Policy model switch for {self.role_name}: {old_model} -> {new_model}")
+                log.info(f"Model config change detected - recreating LLM")
+                
+                # Try to log old vs new model names safely
+                try:
+                    if isinstance(self.current_model_config, dict):
+                        old_model = self.current_model_config.get('model', 'unknown')
+                    else:
+                        old_model = str(self.current_model_config)
+                        
+                    if isinstance(selected_model_config, dict):
+                        new_model = selected_model_config.get('model', 'unknown')
+                    else:
+                        new_model = str(selected_model_config)
+                        
+                    log.info(f"Policy model switch for {self.role_name}: {old_model} -> {new_model}")
+                except Exception as e:
+                    log.warning(f"Could not log model switch details: {e}")
 
             log.info(f"Initializing model with config: {selected_model_config}")
             
-            # 4. Unpack the entire config dictionary into init_chat_model.
-            #    Remove the explicit api_key. LangChain will find it in the environment.
-            self._llm = init_chat_model(**selected_model_config)
+            # 4. Try to unpack the config - this is where it will fail if wrong type
+            try:
+                if isinstance(selected_model_config, dict):
+                    log.info("✅ Attempting to unpack dict config...")
+                    self._llm = init_chat_model(**selected_model_config)
+                    log.info("✅ LLM created successfully")
+                else:
+                    log.error(f"❌ Cannot unpack non-dict config: {selected_model_config}")
+                    log.error("Falling back to default model config...")
+                    
+                    # Fallback to default config
+                    if isinstance(default_model_config, dict):
+                        self._llm = init_chat_model(**default_model_config)
+                        log.info(f"✅ Fallback LLM created with default config")
+                    else:
+                        # Last resort - create with minimal config
+                        log.error("Default config also not dict - using minimal fallback")
+                        self._llm = init_chat_model(
+                            model="gpt-4o-mini",
+                            model_provider="openai"
+                        )
+                        log.info("✅ Minimal fallback LLM created")
+                        
+            except Exception as e:
+                log.error(f"❌ Failed to create LLM: {e}")
+                log.error(f"Config that failed: {selected_model_config}")
+                raise
             
             self.current_model_config = selected_model_config
+        else:
+            log.info("Model config unchanged - reusing existing LLM")
         
+        log.info("=== END MODEL SELECTION DEBUG ===")
         return self._llm
 
 
@@ -389,3 +505,23 @@ class AgentTemplate:
             "human_review": getattr(self.main_agent_config, 'human_review', False),
             "metadata": getattr(self.main_agent_config, 'metadata', {})
         }
+
+
+def policy_select_model(role_name: str, current_model: Any) -> Any:
+    """
+    Integration point for langchain_chains.py
+    Select model based on policy rules.
+    """
+    log.info(f"=== POLICY SELECT MODEL DEBUG ===")
+    log.info(f"Input role_name: {role_name}")
+    log.info(f"Input current_model type: {type(current_model)}")
+    log.info(f"Input current_model value: {current_model}")
+    
+    engine = get_policy_engine()
+    result = engine.select_model(role_name, current_model)
+    
+    log.info(f"Policy engine returned type: {type(result)}")
+    log.info(f"Policy engine returned value: {result}")
+    log.info(f"=== END POLICY SELECT MODEL DEBUG ===")
+    
+    return result
